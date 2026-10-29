@@ -12,7 +12,7 @@ dependencies = [
 ]
 
 [dependency-groups]
-dev = ["httpx>=0.28", "mypy>=2.4", "pytest>=8", "ruff>=0.17"]
+dev = ["httpx>=0.28", "mypy>=2.4", "pytest>=8", "pytest-cov>=7", "ruff>=0.17"]
 
 [tool.ruff]
 line-length = 160  # le style du dépôt : lignes longues, commentaires en fin de ligne
@@ -23,6 +23,15 @@ files = ["src", "tests"]
 [[tool.mypy.overrides]]
 module = ["openfisca_core.*", "openfisca_france.*"]
 ignore_missing_imports = true  # OpenFisca ne publie pas ses types : son usage n'est pas vérifié
+
+[tool.coverage.run]
+source = ["simulator"]
+concurrency = ["thread", "multiprocessing"]  # le moteur calcule dans des processus séparés
+core = "sysmon"  # traceur de Python 3.12+ : la mesure ne ralentit presque pas les tests
+
+[tool.coverage.report]
+fail_under = 90
+show_missing = true
 
 [build-system]
 requires = ["uv_build>=0.11,<0.12"]
