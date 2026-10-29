@@ -102,6 +102,7 @@ Le premier squelette calcule l'avant/après d'un foyer pour un scénario d'exemp
 | `src/simulator/api.py` | L'API FastAPI : `POST /simulation`, ouverte à tous dans la limite de 10 calculs par minute et par adresse IP, documentée sur `/docs` |
 | `tests/` | Tests du moteur et de l'API |
 | `Dockerfile` | L'image déployée sur api.anthropolitics.fr |
+| `.github/workflows/ci.yml` | Lance les tests sur chaque PR ; après un merge sur `main`, relance les tests puis déploie via Coolify. `main` n'accepte que des PR aux tests verts |
 
 Chaque résultat indique les versions de simulator et d'OpenFisca-France qui l'ont produit.
 
