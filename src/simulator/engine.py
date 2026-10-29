@@ -1,7 +1,11 @@
 """Persona + scénario → ce que le scénario change pour le foyer, calculé avec OpenFisca-France."""
 
+from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures.process import BrokenProcessPool
 from functools import lru_cache
 from importlib.metadata import version
+from multiprocessing import get_context
+from threading import Lock
 
 from openfisca_core.reforms import Reform
 from openfisca_core.simulation_builder import SimulationBuilder
@@ -24,8 +28,6 @@ TAUX_ACTUEL = bareme_ir(LOI_ACTUELLE.parameters).brackets[TRANCHE].rate(f"{ANNEE
 
 
 # shortcut: une réforme prend 0,7 s à construire, on garde les 8 dernières ; à revoir avec le catalogue de mesures.
-# shortcut: alterner loi actuelle et réforme vide le cache de paramètres d'OpenFisca (128 dates partagées, 112 lues
-# par simulation) : une requête prend environ 7 s au lieu de 3. À traiter avant d'ouvrir le simulateur au public.
 @lru_cache(maxsize=8)
 def loi(taux: float):
     if taux == TAUX_ACTUEL:
@@ -44,7 +46,7 @@ def loi(taux: float):
     return Scenario(LOI_ACTUELLE)
 
 
-def situation(salaires: list[float], enfants: int) -> dict:
+def situation(salaires: tuple[float, ...], enfants: int) -> dict:
     """Foyer OpenFisca : un ou deux adultes mariés, leurs enfants de 10 ans."""
     adultes = [f"adulte{i + 1}" for i in range(len(salaires))]
     petits = [f"enfant{i + 1}" for i in range(enfants)]
@@ -71,10 +73,33 @@ def calculer(legislation, foyer: dict) -> dict[str, int]:
     return {variable: round(float(simulation.calculate_add(variable, ANNEE).sum())) for variable in VARIABLES}
 
 
-def simuler(salaires: list[float], enfants: int, taux: float) -> dict:
+def calculer_selon(taux: float, foyer: dict) -> dict[str, int]:
+    return calculer(loi(taux), foyer)
+
+
+# OpenFisca garde les paramètres par date dans un cache de 128 entrées commun à toutes les législations, et une simulation
+# en lit 112 : dans un même processus, la loi actuelle et le scénario se chassent du cache (3,5 s par calcul au lieu de 1,3).
+# Chacun tourne donc dans son processus, qui garde son cache chaud, et les deux calculs se font en parallèle.
+PROCESSUS: dict[str, ProcessPoolExecutor] = {}
+VERROU = Lock()
+
+
+def lancer(role: str, taux: float, foyer: dict):
+    with VERROU:
+        try:
+            return PROCESSUS[role].submit(calculer_selon, taux, foyer)
+        except (KeyError, BrokenProcessPool):  # premier calcul, ou processus tué (par exemple faute de mémoire) : on le relance
+            PROCESSUS[role] = ProcessPoolExecutor(max_workers=1, mp_context=get_context("spawn"))
+            return PROCESSUS[role].submit(calculer_selon, taux, foyer)
+
+
+@lru_cache(maxsize=4096)  # mêmes entrées, même résultat : les valeurs par défaut du site ne se calculent qu'une fois
+def simuler(salaires: tuple[float, ...], enfants: int, taux: float) -> dict:
     """Montants annuels du foyer selon la loi actuelle et selon le scénario."""
     foyer = situation(salaires, enfants)
-    avant, apres = calculer(LOI_ACTUELLE, foyer), calculer(loi(taux), foyer)
+    avant = lancer("loi actuelle", TAUX_ACTUEL, foyer)
+    apres = avant if taux == TAUX_ACTUEL else lancer("scenario", taux, foyer)
+    avant, apres = avant.result(), apres.result()
     return {
         "annee": int(ANNEE),
         "avant": avant,

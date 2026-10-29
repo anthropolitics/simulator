@@ -99,7 +99,7 @@ Le premier squelette calcule l'avant/après d'un foyer pour un scénario d'exemp
 | Fichier | Rôle |
 |---|---|
 | `src/simulator/engine.py` | Le moteur : un foyer et un scénario donnent les montants annuels avant et après, calculés avec OpenFisca-France sur la législation 2025 |
-| `src/simulator/api.py` | L'API FastAPI : `POST /simulation`, ouverte à tous, documentée sur `/docs` |
+| `src/simulator/api.py` | L'API FastAPI : `POST /simulation`, ouverte à tous dans la limite de 10 calculs par minute et par adresse IP, documentée sur `/docs` |
 | `tests/` | Tests du moteur et de l'API |
 | `Dockerfile` | L'image déployée sur api.anthropolitics.fr |
 

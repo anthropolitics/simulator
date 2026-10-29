@@ -6,5 +6,5 @@ COPY pyproject.toml uv.lock README.md ./
 COPY src ./src
 RUN uv sync --frozen --no-dev
 EXPOSE 8000
-# Un seul processus : chaque processus garde sa copie de la législation OpenFisca en mémoire.
-CMD ["/app/.venv/bin/uvicorn", "simulator.api:app", "--host", "0.0.0.0", "--port", "8000"]
+# Un seul processus web, qui lance ses deux processus de calcul. Traefik transmet l'adresse IP du visiteur, utilisée par la limite de calculs.
+CMD ["/app/.venv/bin/uvicorn", "simulator.api:app", "--host", "0.0.0.0", "--port", "8000", "--forwarded-allow-ips", "*"]
