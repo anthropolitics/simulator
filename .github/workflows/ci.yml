@@ -1,0 +1,16 @@
+name: CI
+
+# Le déploiement passe par le webhook GitHub de Coolify, à chaque push sur main.
+# La protection de main exige ce job vert sur une PR à jour : rien d'untesté n'y arrive.
+on: pull_request
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: "3.13" # celle du Dockerfile
+      - run: uv sync --frozen
+      - run: uv run pytest
