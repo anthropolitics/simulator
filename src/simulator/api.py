@@ -35,7 +35,8 @@ appels: dict[str, deque] = defaultdict(deque)
 
 
 def limiter(request: Request):
-    maintenant, recents = monotonic(), appels[request.client.host]
+    # Sans adresse (socket Unix), les appels partagent un même compteur.
+    maintenant, recents = monotonic(), appels[request.client.host if request.client else ""]
     while recents and maintenant - recents[0] > FENETRE:
         recents.popleft()
     if len(recents) >= LIMITE:
@@ -73,8 +74,8 @@ class Resultat(BaseModel):
     versions: dict[str, str] = Field(description="Versions du code qui a produit le résultat, pour le rejouer.")
 
 
-@app.post("/simulation", dependencies=[Depends(limiter)])
-def simulation(demande: Simulation) -> Resultat:
+@app.post("/simulation", response_model=Resultat, dependencies=[Depends(limiter)])
+def simulation(demande: Simulation) -> dict:  # FastAPI valide le dict du moteur contre Resultat
     p = demande.persona
     salaires = (p.salaire_brut_mensuel,) + (() if p.salaire_brut_mensuel_conjoint is None else (p.salaire_brut_mensuel_conjoint,))
     return engine.simuler(salaires, p.enfants, demande.scenario.taux_troisieme_tranche_ir)
