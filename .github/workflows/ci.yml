@@ -2,7 +2,10 @@ name: CI
 
 # Le déploiement passe par le webhook GitHub de Coolify, à chaque push sur main.
 # La protection de main exige ce job vert sur une PR à jour : rien d'untesté n'y arrive.
-on: pull_request
+on:
+  pull_request:
+  push:
+    branches: [main] # pour le badge du README : l'état de main, pas celui de la dernière PR
 
 jobs:
   test:

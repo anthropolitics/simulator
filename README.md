@@ -1,5 +1,7 @@
 # simulator
 
+[![CI](https://github.com/anthropolitics/simulator/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/anthropolitics/simulator/actions/workflows/ci.yml?query=branch%3Amain)
+
 Moteur de simulation open source qui calcule ce que chaque programme politique change, concrètement, pour des ménages français types.
 
 > **Statut : en construction.** Un premier squelette calcule l'avant/après d'un foyer pour un scénario d'exemple ; la traduction des programmes arrive en phase 2.
@@ -102,7 +104,7 @@ Le premier squelette calcule l'avant/après d'un foyer pour un scénario d'exemp
 | `src/simulator/api.py` | L'API FastAPI : `POST /simulation`, ouverte à tous dans la limite de 10 calculs par minute et par adresse IP, documentée sur `/docs` |
 | `tests/` | Tests du moteur et de l'API |
 | `Dockerfile` | L'image déployée sur api.anthropolitics.fr |
-| `.github/workflows/ci.yml` | Sur chaque PR, vérifie le lint et le formatage ruff, les types avec mypy, lance les tests, construit l'image Docker et vérifie qu'elle calcule. `main` n'accepte que des PR à jour aux tests verts ; chaque push sur `main` déclenche le déploiement par le webhook GitHub de Coolify |
+| `.github/workflows/ci.yml` | Sur chaque PR et sur `main`, vérifie le lint et le formatage ruff, les types avec mypy, lance les tests, construit l'image Docker et vérifie qu'elle calcule. `main` n'accepte que des PR à jour aux tests verts ; chaque push sur `main` déclenche le déploiement par le webhook GitHub de Coolify |
 
 Chaque résultat indique les versions de simulator et d'OpenFisca-France qui l'ont produit.
 
