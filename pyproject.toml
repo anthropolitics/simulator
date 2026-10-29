@@ -1,0 +1,19 @@
+[project]
+name = "simulator"
+version = "0.1.0"
+description = "Calcule ce qu'une réforme change pour un ménage français, avec OpenFisca-France."
+readme = "README.md"
+license = "AGPL-3.0-only"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.120",
+    "openfisca-france>=176.1",
+    "uvicorn>=0.38",
+]
+
+[dependency-groups]
+dev = ["httpx>=0.28", "pytest>=8"]
+
+[build-system]
+requires = ["uv_build>=0.11,<0.12"]
+build-backend = "uv_build"

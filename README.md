@@ -2,7 +2,7 @@
 
 Moteur de simulation open source qui calcule ce que chaque programme politique change, concrètement, pour des ménages français types.
 
-> **Statut : en construction.** Ce dépôt pose le cadre ; le code arrive avec la phase 1 (novembre 2026).
+> **Statut : en construction.** Un premier squelette calcule l'avant/après d'un foyer pour un scénario d'exemple ; la traduction des programmes arrive en phase 2.
 
 ## Pourquoi
 
@@ -92,6 +92,42 @@ On ne réécrit pas de moteur fiscal : on assemble des briques existantes et on 
 
 Les résultats publiés ici servent de base à des vidéos courtes et pédagogiques : séries par persona, séries par mesure. Chaque vidéo renvoie au scénario correspondant dans ce dépôt, pour que n'importe qui puisse vérifier ou relancer le calcul. La production vidéo n'est pas open source ; les chiffres, si.
 
+## Code
+
+Le premier squelette calcule l'avant/après d'un foyer pour un scénario d'exemple : le taux de la troisième tranche de l'impôt sur le revenu (30 % aujourd'hui). Ce paramètre sert à tester la chaîne de bout en bout ; ce n'est la mesure d'aucun programme.
+
+| Fichier | Rôle |
+|---|---|
+| `src/simulator/engine.py` | Le moteur : un foyer et un scénario donnent les montants annuels avant et après, calculés avec OpenFisca-France sur la législation 2025 |
+| `src/simulator/api.py` | L'API FastAPI : `POST /simulation`, ouverte à tous, documentée sur `/docs` |
+| `tests/` | Tests du moteur et de l'API |
+| `Dockerfile` | L'image déployée sur api.anthropolitics.fr |
+
+Chaque résultat indique les versions de simulator et d'OpenFisca-France qui l'ont produit.
+
+### Lancer en local
+
+Il faut [uv](https://docs.astral.sh/uv/).
+
+```bash
+uv sync
+```
+
+```bash
+uv run pytest
+```
+
+```bash
+uv run uvicorn simulator.api:app --reload
+```
+
+La documentation de l'API est alors sur http://localhost:8000/docs. Exemple d'appel :
+
+```bash
+curl -X POST http://localhost:8000/simulation -H 'Content-Type: application/json' \
+  -d '{"persona": {"salaire_brut_mensuel": 6000}, "scenario": {"taux_troisieme_tranche_ir": 0.35}}'
+```
+
 ## Contribuer
 
 On cherche quelques personnes motivées, à temps partiel, sur l'un de ces chantiers :
@@ -104,4 +140,4 @@ Pour signaler une erreur ou contester la traduction d'une mesure, ouvrez une iss
 
 ## Licence
 
-À définir. OpenFisca-France est sous AGPL-3.0 : la licence retenue devra être compatible.
+[AGPL-3.0](LICENSE), comme OpenFisca-France. Toute version modifiée mise en ligne doit publier son code.
