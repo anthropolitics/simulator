@@ -14,3 +14,5 @@ jobs:
           python-version: "3.13" # celle du Dockerfile
       - run: uv sync --frozen
       - run: uv run pytest
+      # Dans le job requis : un Dockerfile cassé bloque le merge, donc le déploiement.
+      - run: docker build .
