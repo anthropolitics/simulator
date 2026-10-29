@@ -15,4 +15,11 @@ jobs:
       - run: uv sync --frozen
       - run: uv run pytest
       # Dans le job requis : un Dockerfile cassé bloque le merge, donc le déploiement.
-      - run: docker build .
+      - run: docker build -t simulator .
+      # Smoke test : l'image démarre et calcule avec ses seules dépendances de prod.
+      - run: |
+          docker run -d --name api -p 8000:8000 simulator
+          curl -fsS --retry 30 --retry-delay 2 --retry-all-errors -X POST localhost:8000/simulation \
+            -H 'Content-Type: application/json' \
+            -d '{"persona": {"salaire_brut_mensuel": 3000}, "scenario": {"taux_troisieme_tranche_ir": 0.35}}' \
+            || { docker logs api; exit 1; }
