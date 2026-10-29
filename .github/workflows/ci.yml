@@ -19,7 +19,9 @@ jobs:
       - run: uv run ruff check
       - run: uv run ruff format --check
       - run: uv run mypy
-      - run: uv run pytest
+      - run: uv run pytest --cov # échoue sous 90 % de couverture (pyproject.toml)
+      - if: ${{ !cancelled() }}
+        run: uv run coverage report --format=markdown >> "$GITHUB_STEP_SUMMARY"
       # Dans le job requis : un Dockerfile cassé bloque le merge, donc le déploiement.
       - run: docker build -t simulator .
       # Smoke test : l'image démarre et calcule avec ses seules dépendances de prod.
