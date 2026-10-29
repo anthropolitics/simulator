@@ -1,9 +1,8 @@
 name: CI
 
-on:
-  pull_request:
-  push:
-    branches: [main]
+# Le déploiement passe par le webhook GitHub de Coolify, à chaque push sur main.
+# La protection de main exige ce job vert sur une PR à jour : rien d'untesté n'y arrive.
+on: pull_request
 
 jobs:
   test:
@@ -15,15 +14,3 @@ jobs:
           python-version: "3.13" # celle du Dockerfile
       - run: uv sync --frozen
       - run: uv run pytest
-
-  deploy:
-    # Ne déploie que ce qui a passé les tests sur main.
-    needs: test
-    if: github.event_name == 'push'
-    runs-on: ubuntu-latest
-    steps:
-      # L'auto-deploy de Coolify reste coupé : seul ce job déploie.
-      - run: |
-          curl --fail-with-body -sS -X POST -H "Authorization: Bearer $COOLIFY_TOKEN" "https://coolify.loqa.fr/api/v1/deploy?uuid=waeh6x8jbv2vziglmlp8jwt9"
-        env:
-          COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
