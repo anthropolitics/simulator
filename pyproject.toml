@@ -14,6 +14,9 @@ dependencies = [
 [dependency-groups]
 dev = ["httpx>=0.28", "pytest>=8", "ruff>=0.17"]
 
+[tool.ruff]
+line-length = 160  # le style du dépôt : lignes longues, commentaires en fin de ligne
+
 [build-system]
 requires = ["uv_build>=0.11,<0.12"]
 build-backend = "uv_build"
