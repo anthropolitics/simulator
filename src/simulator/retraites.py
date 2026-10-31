@@ -62,10 +62,10 @@ class Parametres:
     prix_achat_point: float = 20.1877
     valeur_point: float = 1.4386
 
-    # Carrières longues (L351-1-1 et D351-1-1 CSS) : (début d'activité avant cet âge, âge de départ en mois) à partir de la génération 1971,
-    # avec la durée requise cotisée. Débuter avant un âge, c'est valider 5 trimestres à la fin de l'année de cet anniversaire.
+    # Carrières longues (L351-1-1 et D351-1-1 CSS) : (début d'activité avant cet âge, âge de départ en mois[, trimestres cotisés exigés en plus])
+    # à partir de la génération 1971, avec la durée requise cotisée. Débuter avant un âge, c'est valider 5 trimestres à la fin de l'année de cet anniversaire.
     # Circulaire Cnav n° 2026-29 du 4 septembre 2026, https://legislation.lassuranceretraite.fr/Documents/Circulaires/Pdf/circulaire_cnav_2026_29_04092026.pdf
-    carrieres_longues: tuple[tuple[int, int], ...] = ((16, 58 * 12), (18, 60 * 12), (20, 62 * 12), (21, 63 * 12))
+    carrieres_longues: tuple[tuple[int, ...], ...] = ((16, 58 * 12), (18, 60 * 12), (20, 62 * 12), (21, 63 * 12))
     duree_carriere_longue: int | None = None  # durée cotisée exigée ; par défaut, la durée requise de la génération
     # Début avant 20 ans, générations antérieures : âge abaissé par le décret n° 2026-345 du 7 mai 2026 (même circulaire). Le plus bas des
     # deux âges s'applique : une mesure qui relève l'âge de la borne de 20 ans remplace aussi ce calendrier.
@@ -153,11 +153,11 @@ def depart(
         return debut + ceil(12 * n / par_an) if par_an else inf
 
     ages = [max(age_legal, age_pour(duree)), p.age_taux_plein]
-    for avant, age_anticipe in p.carrieres_longues:
+    for avant, age_anticipe, *en_plus in p.carrieres_longues:
         if (avant - age_debut + 1) * par_an >= 5:
             if avant == 20:
                 age_anticipe = min(age_anticipe, selon_generation(p.carriere_longue_20_ans, annee_naissance))
-            ages.append(max(age_anticipe, age_pour(p.duree_carriere_longue or duree)))
+            ages.append(max(age_anticipe, age_pour((p.duree_carriere_longue or duree) + sum(en_plus))))
     taux_plein_a = int(min(ages))
     age = taux_plein_a if age_depart is None else age_depart
     if age < min(age_legal, taux_plein_a):

@@ -112,3 +112,10 @@ def test_minimum_de_pension():
 def test_coefficients_agirc_arrco_publies():
     # Agirc-Arrco, tableaux 2 et 3 : 13 trimestres 0,8675 ; 20 trimestres ou 62 ans 0,78 ; 57 ans 0,43.
     assert [coefficient_agirc_arrco(n) for n in (0, 1, 12, 13, 20, 24, 40)] == approx([1, 0.99, 0.88, 0.8675, 0.78, 0.71, 0.43])
+
+
+def test_une_carriere_longue_peut_exiger_des_trimestres_en_plus():
+    # Avant la réforme de 2023, un début avant 16 ans permettait 58 ans avec 8 trimestres de plus que la durée requise.
+    p = replace(PARAMETRES_ACTUELS, carrieres_longues=((16, 58 * 12, 8),))
+    assert depart(1985, 15, SMIC_ANNUEL).age_annees == 58  # 15 + 43 ans
+    assert depart(1985, 15, SMIC_ANNUEL, parametres=p).age_annees == 60  # 15 + 45 ans
