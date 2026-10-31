@@ -16,7 +16,8 @@ from pydantic import BaseModel, Field, field_validator
 
 from simulator.consommation import POSTES, TAUX_DU_POSTE, depenses_imputees
 from simulator.mesures import CATALOGUE, vers_famille, vers_menage
-from simulator.persona import ANNEE, ANNEES, HEURES_TEMPS_PLEIN, Adulte, Depenses, Persona, situation
+from simulator.persona import ANNEE, ANNEES, HEURES_TEMPS_PLEIN, Adulte, Depenses, Persona, salaire_annuel, situation
+from simulator.retraites import PARAMETRES_ACTUELS, Parametres, depart
 
 # Montants annuels du ménage rendus pour chaque législation. Les impôts sont négatifs : ce que le foyer paie.
 SORTIES = (
@@ -260,8 +261,30 @@ def calculer(legislation, persona: Persona) -> dict[str, int]:
     return {sortie: round(float(simulation.calculate_add(VARIABLES_SORTIES.get(sortie, sortie), ANNEE).sum())) for sortie in SORTIES}
 
 
-def calculer_selon(scenario: Scenario, persona: Persona) -> dict[str, int]:
-    return calculer(loi(scenario), persona)
+def parametres_retraite(scenario: Scenario) -> Parametres:
+    parametres = PARAMETRES_ACTUELS
+    for mesure in scenario.mesures:
+        if changer := CATALOGUE[mesure].retraites:
+            parametres = changer(parametres)
+    return parametres
+
+
+def retraites(persona: Persona, smic: dict[str, float], parametres: Parametres) -> list[dict[str, int] | None]:
+    """Départ au taux plein de chaque adulte salarié, au salaire de l'année simulée : None pour les autres."""
+    departs: list[dict[str, int] | None] = []
+    for adulte in persona.adultes:
+        salaire, naissance = salaire_annuel(adulte, ANNEE, smic, SMIC_ACTUEL), int(ANNEE) - adulte.age
+        if not salaire or adulte.retraite_brute_mensuelle or naissance < parametres.age_legal[0][0]:
+            departs.append(None)
+            continue
+        d = depart(naissance, adulte.age_debut_carriere, salaire, adulte.annees_sans_emploi, parametres)
+        departs.append({"age_annees": d.age_annees, "age_mois": d.age_mois, "pension_mensuelle": round(d.pension_mensuelle), "cumul": round(d.cumul)})
+    return departs
+
+
+def calculer_selon(scenario: Scenario, persona: Persona) -> dict:
+    legislation = loi(scenario)
+    return calculer(legislation, persona) | {"retraites": retraites(persona, smic_annuel(legislation), parametres_retraite(scenario))}
 
 
 def brut_depuis_net(net_mensuel: float, legislation=LOI_ACTUELLE) -> float:
@@ -292,7 +315,7 @@ def lancer(role: str, scenario: Scenario, persona: Persona):
 
 
 @lru_cache(maxsize=1024)
-def actuelle(persona: Persona) -> dict[str, int]:
+def actuelle(persona: Persona) -> dict:
     return lancer("loi actuelle", Scenario(), persona).result()
 
 

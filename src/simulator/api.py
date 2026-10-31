@@ -47,6 +47,13 @@ def limiter(request: Request):
     recents.append(maintenant)
 
 
+class Retraite(BaseModel):
+    age_annees: int = Field(description="Âge de départ au taux plein, en années et mois.")
+    age_mois: int
+    pension_mensuelle: int = Field(description="Pension brute du régime général et de l'Agirc-Arrco au départ, en euros de 2025.")
+    cumul: int = Field(description="Pensions brutes sur l'espérance de vie à l'âge de départ, sans actualisation.")
+
+
 class Montants(BaseModel):
     salaire_net: int
     retraite_nette: int
@@ -71,6 +78,9 @@ class Montants(BaseModel):
     depense_hors_energie_taux_intermediaire: int
     depense_hors_energie_taux_reduit: int
     depense_hors_energie_taux_particulier: int
+    retraites: list[Retraite | None] = Field(
+        description="Pour chaque adulte, dans l'ordre : son départ au taux plein ; vide s'il n'a pas de salaire, touche déjà une retraite ou est né avant 1961."
+    )
 
 
 class Simulation(BaseModel):
@@ -101,7 +111,7 @@ class MesureDecrite(BaseModel):
 
 @app.get("/mesures", response_model=list[MesureDecrite])
 def mesures() -> list[dict]:
-    return [{k: v for k, v in vars(m).items() if k != "appliquer"} for m in CATALOGUE.values()]
+    return [{k: v for k, v in vars(m).items() if k not in ("appliquer", "retraites")} for m in CATALOGUE.values()]
 
 
 @app.post("/simulation", response_model=Resultat, dependencies=[Depends(limiter)])

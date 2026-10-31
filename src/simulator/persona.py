@@ -18,6 +18,8 @@ class Adulte(BaseModel, frozen=True):
     apprenti: bool = Field(default=False, description="En contrat d'apprentissage depuis un an ; suppose un âge de 16 à 24 ans.")
     annees_travail_france: int = Field(default=0, ge=0, le=70, description="Années travaillées en France, en équivalent temps plein.")
     insertion_15h: bool = Field(default=False, description="Au moins 15 heures par semaine de formation ou de recherche active d'emploi.")
+    age_debut_carriere: int = Field(default=22, ge=14, le=40, description="Âge du premier emploi, pour la retraite : la carrière garde le salaire actuel.")
+    annees_sans_emploi: int = Field(default=0, ge=0, le=40, description="Années de la carrière, passée et à venir, sans trimestre de retraite validé.")
 
 
 class Depenses(BaseModel, frozen=True):

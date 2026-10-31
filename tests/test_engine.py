@@ -1,4 +1,5 @@
 from concurrent.futures.process import BrokenProcessPool
+from dataclasses import replace
 
 import pytest
 from openfisca_core.model_api import YEAR, Variable
@@ -6,7 +7,7 @@ from openfisca_france.entities import Famille, FoyerFiscal
 
 from simulator import engine
 from simulator.consommation import CODES_2017, DEPENSES_2017, decile, depenses_imputees
-from simulator.engine import LOI_ACTUELLE, TAUX_ACTUEL, Scenario, brut_depuis_net, calculer, loi, simuler
+from simulator.engine import LOI_ACTUELLE, SMIC_ACTUEL, TAUX_ACTUEL, Scenario, brut_depuis_net, calculer, loi, parametres_retraite, retraites, simuler
 from simulator.mesures import CATALOGUE, Mesure, ajouter_impot, ajouter_prestation
 from simulator.persona import Adulte, Depenses, Persona
 
@@ -215,3 +216,22 @@ def test_un_processus_de_calcul_tue_est_relance():
         except BrokenProcessPool:
             pass
     raise AssertionError("le processus de calcul n'a pas été relancé")
+
+
+def test_chaque_salarie_a_son_depart_a_la_retraite():
+    couple = Persona(adultes=(Adulte(age=40, au_smic=True, age_debut_carriere=21), Adulte(age=70, retraite_brute_mensuelle=1500)))
+    salarie, retraite = simuler(couple, Scenario())["avant"]["retraites"]
+    # Né en 1985, début à 21 ans au SMIC : 172 trimestres à 64 ans (voir test_retraites).
+    assert (salarie["age_annees"], salarie["age_mois"], salarie["pension_mensuelle"]) == (64, 0, 1243) and retraite is None
+
+
+def test_une_mesure_change_les_parametres_de_retraite(monkeypatch):
+    def a_62_ans(parametres):
+        return replace(parametres, age_legal_cible=62 * 12, duree_requise_cible=168)
+
+    # Les processus de calcul ne voient pas une mesure ajoutée par le test : le calcul de la retraite se fait ici.
+    monkeypatch.setitem(CATALOGUE, "test_62", Mesure(id="test_62", titre="", candidats=(), source="", citation="", traduction="", retraites=a_62_ans))
+    persona = Persona(adultes=(Adulte(age=40, salaire_brut_mensuel=3000, age_debut_carriere=20),))
+    (avant,), (apres,) = (retraites(persona, SMIC_ACTUEL, parametres_retraite(Scenario(mesures=m))) for m in ((), ("test_62",)))
+    # Début à 20 ans : carrière longue à 63 ans aujourd'hui ; 168 trimestres à 62 ans avec la mesure.
+    assert (avant["age_annees"], apres["age_annees"]) == (63, 62) and apres["cumul"] > avant["cumul"]

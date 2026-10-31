@@ -4,6 +4,8 @@ Un module définit MESURE = Mesure(...). Sa fonction appliquer(reforme) reçoit 
 peut, comme dans toute réforme : changer des paramètres (reforme.modify_parameters), remplacer ou neutraliser une
 variable (reforme.update_variable, reforme.neutralize_variable). Pour créer un impôt ou une prestation, elle passe par
 ajouter_impot ou ajouter_prestation : le montant entre alors dans le revenu disponible, et plusieurs mesures se cumulent.
+Une mesure sur les retraites donne en plus, ou seulement, retraites(parametres) : les paramètres du moteur de retraite
+(simulator.retraites) qu'elle change, par dataclasses.replace.
 """
 
 import importlib
@@ -15,6 +17,8 @@ from openfisca_core.model_api import ADD, Variable
 from openfisca_core.reforms import Reform
 from openfisca_france.entities import Famille, FoyerFiscal
 
+from simulator.retraites import Parametres
+
 
 @dataclass(frozen=True)
 class Mesure:
@@ -24,7 +28,8 @@ class Mesure:
     source: str  # URL du document du candidat qui porte la mesure
     citation: str  # la mesure telle que la source l'écrit
     traduction: str  # comment la mesure devient des paramètres OpenFisca, et les choix faits quand la source est muette
-    appliquer: Callable[[Reform], None]
+    appliquer: Callable[[Reform], None] = lambda reforme: None
+    retraites: Callable[[Parametres], Parametres] | None = None
     a_confirmer: bool = False  # vrai tant que seule une source secondaire porte la mesure
     hypotheses: str = ""  # les effets que le calcul mécanique laisse de côté (comportements, répercussions)
 
