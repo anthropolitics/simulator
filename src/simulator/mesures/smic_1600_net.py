@@ -5,23 +5,28 @@ from simulator.persona import HEURES_TEMPS_PLEIN
 SMIC_BRUT_MENSUEL = 2021.22
 
 
-def appliquer(reforme):
-    def modifier(parametres):
-        smic = parametres.marche_travail.salaire_minimum.smic
-        smic.smic_b_horaire.update(start="2025-01-01", value=SMIC_BRUT_MENSUEL / HEURES_TEMPS_PLEIN)
-        smic.smic_b_mensuel.update(start="2025-01-01", value=SMIC_BRUT_MENSUEL)
-        return parametres
+def smic_a(brut_mensuel: float):
+    """Réforme qui porte le SMIC brut à temps plein à ce montant mensuel à partir du 1er janvier 2025."""
 
-    reforme.modify_parameters(modifier_function=modifier)
+    def appliquer(reforme):
+        def modifier(parametres):
+            smic = parametres.marche_travail.salaire_minimum.smic
+            smic.smic_b_horaire.update(start="2025-01-01", value=brut_mensuel / HEURES_TEMPS_PLEIN)
+            smic.smic_b_mensuel.update(start="2025-01-01", value=brut_mensuel)
+            return parametres
+
+        reforme.modify_parameters(modifier_function=modifier)
+
+    return appliquer
 
 
 MESURE = Mesure(
     id="smic_1600_net",
     titre="SMIC à 1 600 € net par mois",
-    candidats=("Jean-Luc Mélenchon", "Raphaël Glucksmann", "Fabien Roussel", "François Ruffin"),
-    source="Présidentielle 2027 — Analyse des programmes, 28 octobre 2026, p. 19, 27, 45 et 48",
+    candidats=("Raphaël Glucksmann", "Fabien Roussel", "François Ruffin"),
+    source="Présidentielle 2027 — Analyse des programmes, 28 octobre 2026, p. 27, 45 et 48",
     citation=(
-        "Jean-Luc Mélenchon (p. 19) : « SMIC à 1 600 € net » ; Raphaël Glucksmann (p. 27) : « SMIC à 1 600 € net en deux ans » ; "
+        "Raphaël Glucksmann (p. 27) : « SMIC à 1 600 € net en deux ans » ; "
         "Fabien Roussel (p. 45) : « SMIC à 1 600 € net » ; François Ruffin (p. 48) : « SMIC à 1 600 € »."
     ),
     traduction=(
@@ -31,9 +36,9 @@ MESURE = Mesure(
         "2 021,22 €. Le calendrier (en deux ans pour Raphaël Glucksmann) n'est pas simulé : la cible s'applique d'emblée. Pour François Ruffin, le "
         "rapport n'indique pas net ou brut ; 1 600 € brut étant inférieur au SMIC brut de 2025, le montant est lu comme net. Les dispositifs de la "
         "loi actuelle qui se réfèrent au SMIC (allègements de cotisations patronales, prime d'activité, apprentissage, etc.) suivent le nouveau "
-        "montant. Un salaire déclaré au SMIC suit le nouveau montant ; un salaire à temps plein qui passe sous le nouveau SMIC y est relevé, comme la loi l'impose ; les autres salaires restent fixes."
+        "montant. Le rapport prête aussi ce montant à Jean-Luc Mélenchon, dont le programme de 2027 porte 1 700 € net : voir smic_1700_net. Un salaire déclaré au SMIC suit le nouveau montant ; un salaire à temps plein qui passe sous le nouveau SMIC y est relevé, comme la loi l'impose ; les autres salaires restent fixes."
     ),
-    appliquer=appliquer,
+    appliquer=smic_a(SMIC_BRUT_MENSUEL),
     a_confirmer=True,
     hypotheses=(
         "Les salaires au-dessus du SMIC sont tenus fixes : leur éventuelle revalorisation par diffusion de la hausse (grilles de branche) n'est pas "
