@@ -83,6 +83,13 @@ def _avec_crochets(loi):
         definition_period = YEAR
         label = "Au moins 15 heures par semaine de formation ou de recherche active d'emploi"
 
+    # OpenFisca-France applique le barème de l'IFI dès 800 000 € ; l'IFI n'est dû qu'au-delà de 1,3 M€ (CGI, art. 964), borne basse de la décote.
+    class isf_ifi_iai(Variable):
+        def formula_2018_01_01(foyer_fiscal, period, parameters):
+            assiette = foyer_fiscal("assiette_isf_ifi", period)
+            ifi = parameters(period).taxation_capital.impot_fortune_immobiliere_ifi_partir_2018
+            return (assiette > ifi.decote.borne_inferieure_decote) * ifi.bareme.calc(assiette)
+
     class impots_directs(Variable):
         value_type = float
         entity = Menage
@@ -118,6 +125,7 @@ def _avec_crochets(loi):
                 return parametres
 
             self.modify_parameters(modifier_function=sans_forfait_mobilier)
+            self.update_variable(isf_ifi_iai)
 
     return Crochets(loi)
 

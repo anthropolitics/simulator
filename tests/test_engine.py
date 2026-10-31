@@ -109,6 +109,12 @@ def test_l_ifi_porte_sur_le_patrimoine_immobilier():
     assert m["impots_directs"] - m["impot_revenu"] == pytest.approx(-(500_000 * 0.005 + 870_000 * 0.007), abs=1)
 
 
+def test_pas_d_ifi_jusqu_a_1_3_million():
+    persona = Persona(adultes=(Adulte(salaire_brut_mensuel=6000),), patrimoine_immobilier=1_200_000)
+    m = calculer(LOI_ACTUELLE, persona)
+    assert m["impots_directs"] == m["impot_revenu"]
+
+
 def test_la_residence_principale_fait_partie_du_patrimoine_immobilier():
     with pytest.raises(ValueError, match="résidence principale"):
         Persona(adultes=(Adulte(),), patrimoine_immobilier=100_000, residence_principale=200_000)
