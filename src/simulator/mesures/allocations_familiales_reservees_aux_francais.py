@@ -45,8 +45,10 @@ MESURE = Mesure(
     a_confirmer=True,  # document d'une campagne antérieure, que seule une source de 2026 rattache au programme 2027
     hypotheses=(
         "La seconde partie, la condition de cinq années de travail en France pour les prestations non contributives comme le RSA, n'est pas "
-        "simulée : le ménage type ne renseigne pas les années travaillées en France. Le RSA et les autres prestations non contributives des "
-        "ménages étrangers restent soumis aux seules conditions de la loi actuelle. La source prévoit, si nécessaire, un référendum "
+        "simulée : ni ce programme ni le contre-budget 2026 du groupe RN (« Réserver le bénéfice des prestations de solidarités aux étrangers "
+        "ayant au moins 5 ans ETP travaillés en France », https://rassemblementnational.fr/documents/GRN-CONTRE-BUDGET-2026.pdf#page=7) ne "
+        "donnent la liste des prestations visées ; le programme ne cite que le RSA, en exemple. Le RSA et les autres prestations non contributives "
+        "des ménages étrangers restent soumis aux seules conditions de la loi actuelle. La source prévoit, si nécessaire, un référendum "
         "constitutionnel. L'usage des économies, que le livret destine notamment à « la revalorisation des aides dont bénéficient les "
         "nationaux », n'est pas simulé, pas plus que les effets sur les comportements."
     ),

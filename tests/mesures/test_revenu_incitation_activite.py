@@ -39,3 +39,9 @@ def test_chaque_adulte_le_recoit_sans_regard_pour_son_conjoint():
 )
 def test_retraite_et_haut_salaire_ne_sont_pas_concernes(persona):
     assert calculer(MESURE, persona) == calculer(LOI_ACTUELLE, persona)
+
+
+def test_ria_insertion_de_250_euros_sans_salaire_avec_15_heures_de_formation_ou_de_recherche_d_emploi():
+    assert calculer(MESURE, Persona(adultes=(Adulte(insertion_15h=True),)))["prestations_mesures"] == 550 * 12
+    # Avec un salaire, le complément compte déjà le RIA Insertion.
+    assert calculer(MESURE, Persona(adultes=(Adulte(au_smic=True, insertion_15h=True),))) == calculer(MESURE, Persona(adultes=(Adulte(au_smic=True),)))
