@@ -60,13 +60,17 @@ class Montants(BaseModel):
     prestations_mesures: int = Field(description="Prestations créées par les mesures du scénario, comptées dans les prestations sociales.")
     prestations_sociales: int
     revenu_disponible: int
-    tva: int = Field(description="Négatif : TVA payée sur l'énergie, hors du revenu disponible.")
+    tva: int = Field(description="Négatif : TVA payée sur la consommation, hors du revenu disponible.")
     cout_du_travail: int = Field(description="Ce que l'emploi des adultes coûte à leurs employeurs.")
-    depense_electricite: int = Field(description="Dépenses d'énergie TTC aux prix de la loi actuelle, saisies ou imputées ; le scénario les garde.")
+    depense_electricite: int = Field(description="Dépenses de consommation TTC aux prix de la loi actuelle, saisies ou imputées ; le scénario les garde.")
     depense_gaz: int
     depense_fioul: int
     depense_autres_energies_logement: int
     depense_carburants: int
+    depense_hors_energie_taux_normal: int
+    depense_hors_energie_taux_intermediaire: int
+    depense_hors_energie_taux_reduit: int
+    depense_hors_energie_taux_particulier: int
 
 
 class Simulation(BaseModel):
@@ -80,7 +84,7 @@ class Resultat(BaseModel):
     avant: Montants = Field(description="Loi actuelle, en euros par an.")
     apres: Montants = Field(description="Avec le scénario, en euros par an.")
     ecart_revenu_disponible: int
-    ecart_pouvoir_achat: int = Field(description="Écart du revenu disponible et de la TVA payée sur l'énergie.")
+    ecart_pouvoir_achat: int = Field(description="Écart du revenu disponible et de la TVA payée sur la consommation.")
     versions: dict[str, str] = Field(description="Versions du code qui a produit le résultat, pour le rejouer.")
 
 
