@@ -79,18 +79,39 @@ def mesure_de_test(monkeypatch, id, appliquer):
     monkeypatch.setitem(CATALOGUE, id, Mesure(id=id, titre=id, candidats=(), source="", citation="", traduction="", appliquer=appliquer))
 
 
+def smic_a_13_euros(reforme):
+    def modifier(parametres):
+        parametres.marche_travail.salaire_minimum.smic.smic_b_horaire.update(start="2025-01-01", value=13.0)
+        return parametres
+
+    reforme.modify_parameters(modifier_function=modifier)
+
+
 def test_le_salaire_au_smic_suit_le_smic(monkeypatch):
-    def smic_a_13_euros(reforme):
-        def modifier(parametres):
-            parametres.marche_travail.salaire_minimum.smic.smic_b_horaire.update(start="2025-01-01", value=13.0)
-            return parametres
-
-        reforme.modify_parameters(modifier_function=modifier)
-
     mesure_de_test(monkeypatch, "test_smic", smic_a_13_euros)
     au_smic = Persona(adultes=(Adulte(au_smic=True),))
     avant, apres = calculer(LOI_ACTUELLE, au_smic), calculer(loi(Scenario(mesures=("test_smic",))), au_smic)
     assert apres["salaire_net"] / avant["salaire_net"] == pytest.approx(13.0 / 11.88, rel=0.02)
+
+
+def test_un_temps_plein_passe_sous_le_nouveau_smic_y_est_releve(monkeypatch):
+    mesure_de_test(monkeypatch, "test_smic", smic_a_13_euros)
+    scenario = loi(Scenario(mesures=("test_smic",)))
+    au_smic, juste_au_dessus, temps_partiel = (calculer(scenario, seul(s))["salaire_net"] for s in (13.0 * 35 * 52 / 12, 1900, 1500))
+    assert juste_au_dessus == pytest.approx(au_smic, abs=2)
+    assert temps_partiel == calculer(LOI_ACTUELLE, seul(1500))["salaire_net"]
+
+
+def test_l_ifi_porte_sur_le_patrimoine_immobilier():
+    persona = Persona(adultes=(Adulte(salaire_brut_mensuel=6000),), patrimoine_immobilier=2_500_000, residence_principale=1_100_000)
+    m = calculer(LOI_ACTUELLE, persona)
+    # Base : 70 % de 1,1 M€ + 1,4 M€ = 2,17 M€ ; barème : 0,5 % de 0,8 à 1,3 M€, puis 0,7 % jusqu'à 2,17 M€.
+    assert m["impots_directs"] - m["impot_revenu"] == pytest.approx(-(500_000 * 0.005 + 870_000 * 0.007), abs=1)
+
+
+def test_la_residence_principale_fait_partie_du_patrimoine_immobilier():
+    with pytest.raises(ValueError, match="résidence principale"):
+        Persona(adultes=(Adulte(),), patrimoine_immobilier=100_000, residence_principale=200_000)
 
 
 def test_les_impots_et_prestations_des_mesures_se_cumulent(monkeypatch):

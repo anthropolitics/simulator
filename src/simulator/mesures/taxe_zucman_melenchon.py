@@ -31,9 +31,8 @@ TRADUCTION = (
     "totalité de son patrimoine et ce qu'il acquitte déjà au titre de l'impôt sur le revenu (contribution exceptionnelle sur les hauts "
     "revenus comprise), de l'IFI, de la CSG et de la CRDS. Le taux de 2 % porte sur tout le patrimoine, pas seulement sur la part au-delà du "
     "seuil. Le patrimoine est la somme du patrimoine financier et du patrimoine immobilier nets du persona ; le persona ne dit pas quelle part "
-    "est la résidence principale, l'abattement d'un million d'euros que le texte lui accorde n'est donc pas appliqué. Le simulateur ne "
-    "calcule pas l'IFI sur le patrimoine du persona : la déduction de l'IFI est nulle, ce qui surestime l'impôt plancher d'un foyer qui paie "
-    "l'IFI. La contribution différentielle sur les hauts revenus, créée après ce texte, n'est pas déduite. L'impôt s'ajoute aux impôts "
+    "est la résidence principale, l'abattement d'un million d'euros que le texte lui accorde n'est donc pas appliqué. L'IFI déduit est "
+    "celui que la loi 2025 calcule sur le patrimoine immobilier du persona. La contribution différentielle sur les hauts revenus, créée après ce texte, n'est pas déduite. L'impôt s'ajoute aux impôts "
     "directs de l'année 2025."
 )
 HYPOTHESES = (

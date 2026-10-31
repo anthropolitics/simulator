@@ -11,7 +11,7 @@ from openfisca_core.model_api import YEAR, Variable
 from openfisca_core.reforms import Reform
 from openfisca_core.simulation_builder import SimulationBuilder
 from openfisca_france import FranceTaxBenefitSystem
-from openfisca_france.entities import Famille, FoyerFiscal, Menage
+from openfisca_france.entities import Famille, FoyerFiscal, Individu, Menage
 from pydantic import BaseModel, Field, field_validator
 
 from simulator.mesures import CATALOGUE, vers_famille, vers_menage
@@ -59,7 +59,6 @@ def _avec_crochets(loi):
         definition_period = YEAR
         label = "Prestations créées par les mesures simulées"
 
-    # shortcut: le patrimoine du persona n'alimente pas l'IFI de la loi actuelle ; le relier aux cases de l'IFI si une mesure en a besoin.
     class patrimoine_financier(Variable):
         value_type = float
         entity = FoyerFiscal
@@ -71,6 +70,18 @@ def _avec_crochets(loi):
         entity = FoyerFiscal
         definition_period = YEAR
         label = "Patrimoine immobilier net du foyer"
+
+    class annees_travail_france(Variable):
+        value_type = int
+        entity = Individu
+        definition_period = YEAR
+        label = "Années travaillées en France, en équivalent temps plein"
+
+    class insertion_15h(Variable):
+        value_type = bool
+        entity = Individu
+        definition_period = YEAR
+        label = "Au moins 15 heures par semaine de formation ou de recherche active d'emploi"
 
     class impots_directs(Variable):
         value_type = float
@@ -94,10 +105,19 @@ def _avec_crochets(loi):
         name = "Loi actuelle"
 
         def apply(self):
-            for variable in (impots_mesures, prestations_mesures, patrimoine_financier, patrimoine_immobilier):
+            for variable in (impots_mesures, prestations_mesures, patrimoine_financier, patrimoine_immobilier, annees_travail_france, insertion_15h):
                 self.add_variable(variable)
             self.update_variable(impots_directs)
             self.update_variable(prestations_sociales)
+
+            # OpenFisca-France reprend pour l'IFI le forfait mobilier de 5 % de l'ancien ISF ; l'IFI ne taxe que l'immobilier (CGI, art. 965).
+            def sans_forfait_mobilier(parametres):
+                parametres.taxation_capital.impot_fortune_immobiliere_ifi_partir_2018.forfait_mobilier.majoration_forfaitaire.update(
+                    start="2018-01-01", value=0
+                )
+                return parametres
+
+            self.modify_parameters(modifier_function=sans_forfait_mobilier)
 
     return Crochets(loi)
 
@@ -176,13 +196,16 @@ def smic_annuel(legislation) -> dict[str, float]:
     }
 
 
+SMIC_ACTUEL = smic_annuel(LOI_ACTUELLE)
+
+
 def calculer(legislation, persona: Persona) -> dict[str, int]:
-    foyer = situation(persona, smic_annuel(legislation))
+    foyer = situation(persona, smic_annuel(legislation), SMIC_ACTUEL)
     if any(a.retraite_brute_mensuelle for a in persona.adultes):
         # Le taux de CSG sur une pension dépend du revenu fiscal de N-2 ; le calculer dans la même simulation crée une spirale
         # qu'OpenFisca coupe en annulant la CSG. On le fournit donc en entrée, estimé par une première simulation sur N-1.
         # shortcut: ce revenu de N-1 ignore la CSG déductible de N-1, il est surestimé de 4 à 6 % de la pension ; itérer si un cas limite en dépend.
-        premiere = SimulationBuilder().build_from_entities(legislation, situation(persona, smic_annuel(legislation)))
+        premiere = SimulationBuilder().build_from_entities(legislation, situation(persona, smic_annuel(legislation), SMIC_ACTUEL))
         foyer["foyers_fiscaux"]["foyer"]["rfr"] = {str(int(ANNEE) - 2): float(premiere.calculate("rfr", ANNEES[0])[0])}
     simulation = SimulationBuilder().build_from_entities(legislation, foyer)
     return {sortie: round(float(simulation.calculate_add(VARIABLES_SORTIES.get(sortie, sortie), ANNEE).sum())) for sortie in SORTIES}
@@ -198,7 +221,7 @@ def brut_depuis_net(net_mensuel: float, legislation=LOI_ACTUELLE) -> float:
     while haut - bas > 0.01:
         milieu = (bas + haut) / 2
         persona = Persona(adultes=(Adulte(salaire_brut_mensuel=milieu),))
-        simulation = SimulationBuilder().build_from_entities(legislation, situation(persona, smic_annuel(legislation)))
+        simulation = SimulationBuilder().build_from_entities(legislation, situation(persona, smic_annuel(legislation), SMIC_ACTUEL))
         bas, haut = (milieu, haut) if simulation.calculate_add("salaire_net", ANNEE).sum() / 12 < net_mensuel else (bas, milieu)
     return round((bas + haut) / 2, 2)
 

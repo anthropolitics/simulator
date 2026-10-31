@@ -16,6 +16,8 @@ class Adulte(BaseModel, frozen=True):
     nationalite: str = Field(default="FR", pattern="^[A-Z]{2}$", description="Code ISO du pays.")
     annees_titre_sejour: int = Field(default=0, ge=0, le=90, description="Pour un étranger : ancienneté de son titre de séjour.")
     apprenti: bool = Field(default=False, description="En contrat d'apprentissage depuis un an ; suppose un âge de 16 à 24 ans.")
+    annees_travail_france: int = Field(default=0, ge=0, le=70, description="Années travaillées en France, en équivalent temps plein.")
+    insertion_15h: bool = Field(default=False, description="Au moins 15 heures par semaine de formation ou de recherche active d'emploi.")
 
 
 class Persona(BaseModel, frozen=True):
@@ -24,7 +26,8 @@ class Persona(BaseModel, frozen=True):
     loyer_mensuel: float = Field(default=0, ge=0, le=20_000)
     code_commune: str | None = Field(default=None, pattern="^[0-9AB]{5}$", description="Code INSEE ; il fixe la zone des aides au logement.")
     patrimoine_financier: float = Field(default=0, ge=0, description="Patrimoine financier net du foyer.")
-    patrimoine_immobilier: float = Field(default=0, ge=0, description="Patrimoine immobilier net du foyer.")
+    patrimoine_immobilier: float = Field(default=0, ge=0, description="Patrimoine immobilier net du foyer, résidence principale comprise.")
+    residence_principale: float = Field(default=0, ge=0, description="Valeur nette de la résidence principale, comprise dans le patrimoine immobilier.")
 
     @model_validator(mode="before")
     @classmethod
@@ -34,6 +37,12 @@ class Persona(BaseModel, frozen=True):
             salaires = [donnees["salaire_brut_mensuel"], donnees.get("salaire_brut_mensuel_conjoint")]
             return {"adultes": [{"salaire_brut_mensuel": s} for s in salaires if s is not None], "enfants": [10] * donnees.get("enfants", 0)}
         return donnees
+
+    @model_validator(mode="after")
+    def residence_dans_le_patrimoine(self):
+        if self.residence_principale > self.patrimoine_immobilier:
+            raise ValueError("La résidence principale fait partie du patrimoine immobilier : elle ne peut pas le dépasser.")
+        return self
 
     @model_validator(mode="after")
     def commune_si_loyer(self):
@@ -48,8 +57,17 @@ class Persona(BaseModel, frozen=True):
         return self
 
 
-def situation(persona: Persona, smic_annuel: dict[str, float]) -> dict:
-    """Situation OpenFisca du persona ; smic_annuel donne, par année, le SMIC à temps plein de la législation simulée."""
+def salaire_annuel(adulte: Adulte, annee: str, smic: dict[str, float], smic_actuel: dict[str, float]) -> float:
+    if adulte.au_smic:
+        return smic[annee]
+    salaire = adulte.salaire_brut_mensuel * 12
+    # Un salaire au moins égal au SMIC actuel est celui d'un temps plein : la loi le relève au SMIC simulé s'il passe dessous.
+    # shortcut: un salaire plus bas est lu comme un temps partiel et reste fixe ; à revoir si le persona décrit ses heures.
+    return max(salaire, smic[annee]) if salaire >= smic_actuel[annee] else salaire
+
+
+def situation(persona: Persona, smic: dict[str, float], smic_actuel: dict[str, float]) -> dict:
+    """Situation OpenFisca du persona ; smic et smic_actuel donnent, par année, le SMIC à temps plein de la législation simulée et de la loi actuelle."""
     adultes = [f"adulte{i + 1}" for i in range(len(persona.adultes))]
     petits = [f"enfant{i + 1}" for i in range(len(persona.enfants))]
     individus: dict[str, dict] = {}
@@ -57,13 +75,17 @@ def situation(persona: Persona, smic_annuel: dict[str, float]) -> dict:
         individu = {
             "date_naissance": {"ETERNITY": f"{int(ANNEE) - a.age}-01-01"},
             "statut_marital": {annee: "marie" if len(adultes) == 2 else "celibataire" for annee in ANNEES},
-            "salaire_de_base": {annee: smic_annuel[annee] if a.au_smic else a.salaire_brut_mensuel * 12 for annee in ANNEES},
+            "salaire_de_base": {annee: salaire_annuel(a, annee, smic, smic_actuel) for annee in ANNEES},
         }
         if a.retraite_brute_mensuelle:
             individu["retraite_brute"] = {annee: a.retraite_brute_mensuelle * 12 for annee in ANNEES}
         if a.nationalite != "FR":
             individu["nationalite"] = {annee: a.nationalite for annee in ANNEES}
             individu["duree_possession_titre_sejour"] = {annee: a.annees_titre_sejour for annee in ANNEES}
+        if a.annees_travail_france:
+            individu["annees_travail_france"] = {ANNEE: a.annees_travail_france}
+        if a.insertion_15h:
+            individu["insertion_15h"] = {ANNEE: True}
         if a.apprenti:
             individu["apprentissage_contrat_debut"] = {annee: f"{int(ANNEE) - 1}-01-01" for annee in ANNEES}
         individus[nom] = individu
@@ -86,7 +108,13 @@ def situation(persona: Persona, smic_annuel: dict[str, float]) -> dict:
         }
     foyer: dict = {"declarants": adultes, "personnes_a_charge": petits}
     if persona.patrimoine_financier or persona.patrimoine_immobilier:
-        foyer |= {"patrimoine_financier": {ANNEE: persona.patrimoine_financier}, "patrimoine_immobilier": {ANNEE: persona.patrimoine_immobilier}}
+        foyer |= {
+            "patrimoine_financier": {ANNEE: persona.patrimoine_financier},
+            "patrimoine_immobilier": {ANNEE: persona.patrimoine_immobilier},
+            # Cases de la déclaration d'IFI : valeur de la résidence principale, avant son abattement de 30 %, et des autres immeubles.
+            "b1ab": {ANNEE: persona.residence_principale},
+            "b1ac": {ANNEE: persona.patrimoine_immobilier - persona.residence_principale},
+        }
     return {
         "individus": individus,
         "foyers_fiscaux": {"foyer": foyer},
