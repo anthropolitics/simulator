@@ -18,7 +18,7 @@ Le moteur prend un **persona** et un **scénario**, et renvoie ce que le scénar
 
 - **Persona** : un ménage type (composition, revenus, logement, territoire), calé sur les statistiques publiques de l'INSEE.
 - **Scénario** : les mesures d'un programme, traduites en paramètres documentés et sourcés.
-- **Résultat** : un fichier JSON versionné, par exemple le revenu disponible annuel avant et après, détaillé en impôts, cotisations et prestations.
+- **Résultat** : un fichier JSON versionné, par exemple le revenu disponible annuel avant et après, détaillé en impôts, cotisations et prestations, et pour chaque salarié son âge de départ à la retraite au taux plein, sa pension et leur cumul sur l'espérance de vie.
 
 Exemple de lecture : « Sophie, infirmière à Lille, deux enfants. Programme A : + X €/an. Programme B : − Y €/an. Programme C : entre − Z et + W €/an, selon l'effet sur l'emploi. »
 
@@ -101,8 +101,9 @@ Le moteur calcule l'avant/après d'un ménage type pour un scénario : une ou pl
 | Fichier | Rôle |
 |---|---|
 | `src/simulator/engine.py` | Le moteur : un persona et un scénario donnent les montants annuels avant et après, détaillés par dispositif, calculés avec OpenFisca-France sur la législation 2025 |
-| `src/simulator/persona.py` | Le ménage type : adultes (âge, salaire, retraite, nationalité…), enfants, loyer et commune, patrimoine, dépenses de consommation |
+| `src/simulator/persona.py` | Le ménage type : adultes (âge, salaire, retraite, nationalité, début de carrière…), enfants, loyer et commune, patrimoine, dépenses de consommation |
 | `src/simulator/consommation.py` | Les dépenses de consommation d'un ménage, imputées selon son niveau de vie à partir de l'enquête Budget de famille 2017 de l'Insee et portées aux prix de 2025, quand le persona ne les donne pas : l'énergie poste par poste, le reste regroupé par taux de TVA selon une table qui donne le taux de chaque code de l'enquête. Elles servent aux mesures de TVA, avec une répercussion intégrale des taux sur les prix, et restent fixes d'un scénario à l'autre |
+| `src/simulator/retraites.py` | La retraite de chaque adulte salarié, calculée hors d'OpenFisca par un moteur simplifié (régime général et Agirc-Arrco, carrière au salaire actuel) : âge de départ au taux plein, pension mensuelle brute et cumul sur l'espérance de vie, selon la loi actuelle et selon le scénario |
 | `src/simulator/mesures/` | Le catalogue : un fichier par mesure, avec sa source, la citation exacte, sa traduction en paramètres et les effets que le calcul laisse de côté. Une mesure qui ne s'appuie encore que sur une source secondaire est marquée « à confirmer » |
 | `src/simulator/api.py` | L'API FastAPI : `POST /simulation` et `GET /mesures`, ouverte à tous dans la limite de 10 calculs par minute et par adresse IP, documentée sur `/docs` |
 | `tests/` | Tests du moteur, de l'API et de chaque mesure |
