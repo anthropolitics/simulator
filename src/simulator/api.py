@@ -9,13 +9,16 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from simulator import engine
+from simulator.engine import Scenario
+from simulator.mesures import CATALOGUE
+from simulator.persona import Adulte, Persona
 
 
 @asynccontextmanager
 async def demarrage(app: FastAPI):
     # Lance les deux processus de calcul sans attendre : le premier visiteur ne paie pas leur démarrage (environ 4 s).
     for role in ("loi actuelle", "scenario"):
-        engine.lancer(role, engine.TAUX_ACTUEL, engine.situation((2500,), 0))
+        engine.lancer(role, Scenario(), Persona(adultes=(Adulte(salaire_brut_mensuel=2500),)))
     yield
 
 
@@ -26,7 +29,7 @@ app = FastAPI(
     license_info={"name": "AGPL-3.0", "identifier": "AGPL-3.0-only"},
 )
 # API ouverte : n'importe quel site peut l'appeler depuis un navigateur.
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["POST"], allow_headers=["Content-Type"])
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["GET", "POST"], allow_headers=["Content-Type"])
 
 
 # shortcut: compteur en mémoire, par processus, jamais purgé des adresses passées ; passer au proxy ou à Redis si le trafic grossit.
@@ -44,14 +47,20 @@ def limiter(request: Request):
     recents.append(maintenant)
 
 
-class Persona(BaseModel):
-    salaire_brut_mensuel: float = Field(ge=0, le=100_000)
-    salaire_brut_mensuel_conjoint: float | None = Field(default=None, ge=0, le=100_000, description="Absent si la personne vit seule.")
-    enfants: int = Field(default=0, ge=0, le=6)
-
-
-class Scenario(BaseModel):
-    taux_troisieme_tranche_ir: float = Field(ge=0, le=0.6, description="Taux de la tranche à 30 % du barème de l'impôt sur le revenu, entre 0 et 0,6.")
+class Montants(BaseModel):
+    salaire_net: int
+    retraite_nette: int
+    csg: int = Field(description="Négatif : ce que le foyer paie, déjà retranché des revenus nets.")
+    impot_revenu: int = Field(description="Négatif : ce que le foyer paie.")
+    impots_mesures: int = Field(description="Impôts créés par les mesures du scénario, comptés dans les impôts directs.")
+    impots_directs: int = Field(description="Négatif : ce que le foyer paie.")
+    prestations_familiales: int
+    minima_sociaux: int
+    aides_logement: int
+    prestations_mesures: int = Field(description="Prestations créées par les mesures du scénario, comptées dans les prestations sociales.")
+    prestations_sociales: int
+    revenu_disponible: int
+    cout_du_travail: int = Field(description="Ce que l'emploi des adultes coûte à leurs employeurs.")
 
 
 class Simulation(BaseModel):
@@ -59,23 +68,31 @@ class Simulation(BaseModel):
     scenario: Scenario
 
 
-class Montants(BaseModel):
-    salaire_net: int
-    impots_directs: int = Field(description="Négatif : ce que le foyer paie.")
-    prestations_sociales: int
-    revenu_disponible: int
-
-
 class Resultat(BaseModel):
     annee: int
+    mesures: list[str]
     avant: Montants = Field(description="Loi actuelle, en euros par an.")
     apres: Montants = Field(description="Avec le scénario, en euros par an.")
     ecart_revenu_disponible: int
     versions: dict[str, str] = Field(description="Versions du code qui a produit le résultat, pour le rejouer.")
 
 
+class MesureDecrite(BaseModel):
+    id: str
+    titre: str
+    candidats: list[str]
+    source: str
+    citation: str
+    traduction: str
+    a_confirmer: bool = Field(description="Vrai tant que seule une source secondaire porte la mesure.")
+    hypotheses: str = Field(description="Les effets que le calcul mécanique laisse de côté.")
+
+
+@app.get("/mesures", response_model=list[MesureDecrite])
+def mesures() -> list[dict]:
+    return [{k: v for k, v in vars(m).items() if k != "appliquer"} for m in CATALOGUE.values()]
+
+
 @app.post("/simulation", response_model=Resultat, dependencies=[Depends(limiter)])
 def simulation(demande: Simulation) -> dict:  # FastAPI valide le dict du moteur contre Resultat
-    p = demande.persona
-    salaires = (p.salaire_brut_mensuel,) + (() if p.salaire_brut_mensuel_conjoint is None else (p.salaire_brut_mensuel_conjoint,))
-    return engine.simuler(salaires, p.enfants, demande.scenario.taux_troisieme_tranche_ir)
+    return engine.simuler(demande.persona, demande.scenario)

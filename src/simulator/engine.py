@@ -7,16 +7,102 @@ from importlib.metadata import version
 from multiprocessing import get_context
 from threading import Lock
 
+from openfisca_core.model_api import YEAR, Variable
 from openfisca_core.reforms import Reform
 from openfisca_core.simulation_builder import SimulationBuilder
 from openfisca_france import FranceTaxBenefitSystem
+from openfisca_france.entities import Famille, FoyerFiscal, Menage
+from pydantic import BaseModel, Field, field_validator
 
-# Dernière année dont la législation est entièrement votée : le barème des revenus 2025 date de la loi de finances 2026.
-ANNEE = "2025"
-VARIABLES = ("salaire_net", "impots_directs", "prestations_sociales", "revenu_disponible")
+from simulator.mesures import CATALOGUE, vers_famille, vers_menage
+from simulator.persona import ANNEE, ANNEES, HEURES_TEMPS_PLEIN, Adulte, Persona, situation
+
+# Montants annuels du ménage rendus pour chaque législation. Les impôts sont négatifs : ce que le foyer paie.
+SORTIES = (
+    "salaire_net",
+    "retraite_nette",
+    "csg",
+    "impot_revenu",
+    "impots_mesures",
+    "impots_directs",
+    "prestations_familiales",
+    "minima_sociaux",
+    "aides_logement",
+    "prestations_mesures",
+    "prestations_sociales",
+    "revenu_disponible",
+    "cout_du_travail",
+)
+VARIABLES_SORTIES = {"impot_revenu": "irpp_economique"}
 VERSIONS = {paquet: version(paquet) for paquet in ("simulator", "openfisca-france")}
 
-LOI_ACTUELLE = FranceTaxBenefitSystem()
+
+def _appeler(formule, entite, period, parameters):
+    # OpenFisca accepte des formules à deux ou trois arguments.
+    return formule(entite, period, parameters) if formule.__code__.co_argcount == 3 else formule(entite, period)
+
+
+def _avec_crochets(loi):
+    """La loi, plus les entrées propres au simulateur et deux crochets, nuls ici, où les mesures branchent impôts et prestations."""
+    impots_directs_actuels = loi.variables["impots_directs"].get_formula(ANNEE)
+    prestations_sociales_actuelles = loi.variables["prestations_sociales"].get_formula(ANNEE)
+
+    class impots_mesures(Variable):
+        value_type = float
+        entity = Menage
+        definition_period = YEAR
+        label = "Impôts créés par les mesures simulées, montant payé"
+
+    class prestations_mesures(Variable):
+        value_type = float
+        entity = Famille
+        definition_period = YEAR
+        label = "Prestations créées par les mesures simulées"
+
+    # shortcut: le patrimoine du persona n'alimente pas l'IFI de la loi actuelle ; le relier aux cases de l'IFI si une mesure en a besoin.
+    class patrimoine_financier(Variable):
+        value_type = float
+        entity = FoyerFiscal
+        definition_period = YEAR
+        label = "Patrimoine financier net du foyer"
+
+    class patrimoine_immobilier(Variable):
+        value_type = float
+        entity = FoyerFiscal
+        definition_period = YEAR
+        label = "Patrimoine immobilier net du foyer"
+
+    class impots_directs(Variable):
+        value_type = float
+        entity = Menage
+        definition_period = YEAR
+        label = "Impôts directs, y compris ceux des mesures simulées"
+
+        def formula(menage, period, parameters):
+            return _appeler(impots_directs_actuels, menage, period, parameters) - menage("impots_mesures", period)
+
+    class prestations_sociales(Variable):
+        value_type = float
+        entity = Famille
+        definition_period = YEAR
+        label = "Prestations sociales, y compris celles des mesures simulées"
+
+        def formula(famille, period, parameters):
+            return _appeler(prestations_sociales_actuelles, famille, period, parameters) + famille("prestations_mesures", period)
+
+    class Crochets(Reform):
+        name = "Loi actuelle"
+
+        def apply(self):
+            for variable in (impots_mesures, prestations_mesures, patrimoine_financier, patrimoine_immobilier):
+                self.add_variable(variable)
+            self.update_variable(impots_directs)
+            self.update_variable(prestations_sociales)
+
+    return Crochets(loi)
+
+
+LOI_ACTUELLE = _avec_crochets(FranceTaxBenefitSystem())
 TRANCHE = 2  # troisième tranche du barème de l'impôt sur le revenu (30 % en 2025)
 
 
@@ -27,54 +113,94 @@ def bareme_ir(parametres):
 TAUX_ACTUEL = bareme_ir(LOI_ACTUELLE.parameters).brackets[TRANCHE].rate(f"{ANNEE}-01-01")
 
 
-# shortcut: une réforme prend 0,7 s à construire, on garde les 8 dernières ; à revoir avec le catalogue de mesures.
+class Scenario(BaseModel, frozen=True):
+    mesures: tuple[str, ...] = Field(default=(), description="Identifiants des mesures du catalogue, voir GET /mesures.")
+    taux_troisieme_tranche_ir: float | None = Field(
+        default=None, ge=0, le=0.6, description="Taux de la tranche à 30 % du barème de l'impôt sur le revenu, entre 0 et 0,6."
+    )
+
+    @field_validator("mesures")
+    @classmethod
+    def mesures_connues(cls, mesures):
+        if inconnues := set(mesures) - CATALOGUE.keys():
+            raise ValueError(f"Mesures inconnues : {', '.join(sorted(inconnues))}.")
+        return tuple(sorted(set(mesures)))  # même scénario, même clé de cache
+
+    @property
+    def neutre(self) -> bool:
+        return not self.mesures and self.taux_troisieme_tranche_ir in (None, TAUX_ACTUEL)
+
+
+def _sommer(reforme, nom: str, entite, variables, ramener) -> None:
+    def formula(population, period):
+        return sum(ramener(population, variable, period) for variable in variables)
+
+    reforme.update_variable(type(nom, (Variable,), {"value_type": float, "entity": entite, "definition_period": YEAR, "formula": formula}))
+
+
+# shortcut: une réforme prend 0,7 s à construire, on garde les 8 dernières ; à revoir quand le site combinera les mesures librement.
 @lru_cache(maxsize=8)
-def loi(taux: float):
-    if taux == TAUX_ACTUEL:
+def loi(scenario: Scenario):
+    if scenario.neutre:
         return LOI_ACTUELLE
 
-    class Scenario(Reform):
-        name = f"Taux de la troisième tranche de l'impôt sur le revenu à {taux:.0%}"
+    class Simulee(Reform):
+        name = ", ".join(CATALOGUE[m].titre for m in scenario.mesures) or "Taux de la troisième tranche de l'impôt sur le revenu"
 
         def apply(self):
-            def modifier(parametres):
-                bareme_ir(parametres).brackets[TRANCHE].rate.update(start=f"{ANNEE}-01-01", value=taux)
-                return parametres
+            self.impots_ajoutes, self.prestations_ajoutees = [], []
+            if (taux := scenario.taux_troisieme_tranche_ir) is not None:
 
-            self.modify_parameters(modifier_function=modifier)
+                def modifier(parametres):
+                    bareme_ir(parametres).brackets[TRANCHE].rate.update(start=f"{ANNEE}-01-01", value=taux)
+                    return parametres
 
-    return Scenario(LOI_ACTUELLE)
+                self.modify_parameters(modifier_function=modifier)
+            for mesure in scenario.mesures:
+                CATALOGUE[mesure].appliquer(self)
+            if self.impots_ajoutes:
+                _sommer(self, "impots_mesures", Menage, self.impots_ajoutes, vers_menage)
+            if self.prestations_ajoutees:
+                _sommer(self, "prestations_mesures", Famille, self.prestations_ajoutees, vers_famille)
+
+    return Simulee(LOI_ACTUELLE)
 
 
-def situation(salaires: tuple[float, ...], enfants: int) -> dict:
-    """Foyer OpenFisca : un ou deux adultes mariés, leurs enfants de 10 ans."""
-    adultes = [f"adulte{i + 1}" for i in range(len(salaires))]
-    petits = [f"enfant{i + 1}" for i in range(enfants)]
-    individus = {
-        nom: {
-            # Les minima sociaux regardent les revenus des mois précédents : sans l'année d'avant, OpenFisca verse un RSA fantôme.
-            "salaire_de_base": {str(int(ANNEE) - 1): salaire * 12, ANNEE: salaire * 12},
-            "date_naissance": {"ETERNITY": "1985-01-01"},
-            "statut_marital": {ANNEE: "marie" if len(adultes) == 2 else "celibataire"},
-        }
-        for nom, salaire in zip(adultes, salaires)
-    }
-    individus |= {nom: {"date_naissance": {"ETERNITY": "2015-01-01"}} for nom in petits}
+def smic_annuel(legislation) -> dict[str, float]:
+    """SMIC brut à temps plein de chaque année, mois par mois, selon la législation."""
     return {
-        "individus": individus,
-        "foyers_fiscaux": {"foyer": {"declarants": adultes, "personnes_a_charge": petits}},
-        "familles": {"famille": {"parents": adultes, "enfants": petits}},
-        "menages": {"menage": {"personne_de_reference": adultes[:1], "conjoint": adultes[1:], "enfants": petits}},
+        annee: sum(
+            legislation.parameters(f"{annee}-{mois:02d}-01").marche_travail.salaire_minimum.smic.smic_b_horaire * HEURES_TEMPS_PLEIN for mois in range(1, 13)
+        )
+        for annee in ANNEES
     }
 
 
-def calculer(legislation, foyer: dict) -> dict[str, int]:
+def calculer(legislation, persona: Persona) -> dict[str, int]:
+    foyer = situation(persona, smic_annuel(legislation))
+    if any(a.retraite_brute_mensuelle for a in persona.adultes):
+        # Le taux de CSG sur une pension dépend du revenu fiscal de N-2 ; le calculer dans la même simulation crée une spirale
+        # qu'OpenFisca coupe en annulant la CSG. On le fournit donc en entrée, estimé par une première simulation sur N-1.
+        # shortcut: ce revenu de N-1 ignore la CSG déductible de N-1, il est surestimé de 4 à 6 % de la pension ; itérer si un cas limite en dépend.
+        premiere = SimulationBuilder().build_from_entities(legislation, situation(persona, smic_annuel(legislation)))
+        foyer["foyers_fiscaux"]["foyer"]["rfr"] = {str(int(ANNEE) - 2): float(premiere.calculate("rfr", ANNEES[0])[0])}
     simulation = SimulationBuilder().build_from_entities(legislation, foyer)
-    return {variable: round(float(simulation.calculate_add(variable, ANNEE).sum())) for variable in VARIABLES}
+    return {sortie: round(float(simulation.calculate_add(VARIABLES_SORTIES.get(sortie, sortie), ANNEE).sum())) for sortie in SORTIES}
 
 
-def calculer_selon(taux: float, foyer: dict) -> dict[str, int]:
-    return calculer(loi(taux), foyer)
+def calculer_selon(scenario: Scenario, persona: Persona) -> dict[str, int]:
+    return calculer(loi(scenario), persona)
+
+
+def brut_depuis_net(net_mensuel: float, legislation=LOI_ACTUELLE) -> float:
+    """Salaire brut mensuel d'un salarié seul, à temps plein, qui touche ce salaire net ; OpenFisca ne calcule que dans l'autre sens."""
+    bas, haut = net_mensuel, net_mensuel * 2
+    while haut - bas > 0.01:
+        milieu = (bas + haut) / 2
+        persona = Persona(adultes=(Adulte(salaire_brut_mensuel=milieu),))
+        simulation = SimulationBuilder().build_from_entities(legislation, situation(persona, smic_annuel(legislation)))
+        bas, haut = (milieu, haut) if simulation.calculate_add("salaire_net", ANNEE).sum() / 12 < net_mensuel else (bas, milieu)
+    return round((bas + haut) / 2, 2)
 
 
 # OpenFisca garde les paramètres par date dans un cache de 128 entrées commun à toutes les législations, et une simulation
@@ -84,24 +210,24 @@ PROCESSUS: dict[str, ProcessPoolExecutor] = {}
 VERROU = Lock()
 
 
-def lancer(role: str, taux: float, foyer: dict):
+def lancer(role: str, scenario: Scenario, persona: Persona):
     with VERROU:
         try:
-            return PROCESSUS[role].submit(calculer_selon, taux, foyer)
+            return PROCESSUS[role].submit(calculer_selon, scenario, persona)
         except (KeyError, BrokenProcessPool):  # premier calcul, ou processus tué (par exemple faute de mémoire) : on le relance
             PROCESSUS[role] = ProcessPoolExecutor(max_workers=1, mp_context=get_context("spawn"))
-            return PROCESSUS[role].submit(calculer_selon, taux, foyer)
+            return PROCESSUS[role].submit(calculer_selon, scenario, persona)
 
 
 @lru_cache(maxsize=4096)  # mêmes entrées, même résultat : les valeurs par défaut du site ne se calculent qu'une fois
-def simuler(salaires: tuple[float, ...], enfants: int, taux: float) -> dict:
+def simuler(persona: Persona, scenario: Scenario) -> dict:
     """Montants annuels du foyer selon la loi actuelle et selon le scénario."""
-    foyer = situation(salaires, enfants)
-    avant = lancer("loi actuelle", TAUX_ACTUEL, foyer)
-    apres = avant if taux == TAUX_ACTUEL else lancer("scenario", taux, foyer)
+    avant = lancer("loi actuelle", Scenario(), persona)
+    apres = avant if scenario.neutre else lancer("scenario", scenario, persona)
     avant, apres = avant.result(), apres.result()
     return {
         "annee": int(ANNEE),
+        "mesures": list(scenario.mesures),
         "avant": avant,
         "apres": apres,
         "ecart_revenu_disponible": apres["revenu_disponible"] - avant["revenu_disponible"],
