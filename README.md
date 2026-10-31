@@ -96,13 +96,15 @@ Les résultats publiés ici servent de base à des vidéos courtes et pédagogiq
 
 ## Code
 
-Le premier squelette calcule l'avant/après d'un foyer pour un scénario d'exemple : le taux de la troisième tranche de l'impôt sur le revenu (30 % aujourd'hui). Ce paramètre sert à tester la chaîne de bout en bout ; ce n'est la mesure d'aucun programme.
+Le moteur calcule l'avant/après d'un ménage type pour un scénario : une ou plusieurs mesures du catalogue, appliquées à la législation 2025 « comme si elles s'appliquaient aujourd'hui ». Le taux de la troisième tranche de l'impôt sur le revenu reste réglable à part, pour tester la chaîne ; ce n'est la mesure d'aucun programme.
 
 | Fichier | Rôle |
 |---|---|
-| `src/simulator/engine.py` | Le moteur : un foyer et un scénario donnent les montants annuels avant et après, calculés avec OpenFisca-France sur la législation 2025 |
-| `src/simulator/api.py` | L'API FastAPI : `POST /simulation`, ouverte à tous dans la limite de 10 calculs par minute et par adresse IP, documentée sur `/docs` |
-| `tests/` | Tests du moteur et de l'API |
+| `src/simulator/engine.py` | Le moteur : un persona et un scénario donnent les montants annuels avant et après, détaillés par dispositif, calculés avec OpenFisca-France sur la législation 2025 |
+| `src/simulator/persona.py` | Le ménage type : adultes (âge, salaire, retraite, nationalité…), enfants, loyer et commune, patrimoine |
+| `src/simulator/mesures/` | Le catalogue : un fichier par mesure, avec sa source, la citation exacte, sa traduction en paramètres et les effets que le calcul laisse de côté. Une mesure qui ne s'appuie encore que sur une source secondaire est marquée « à confirmer » |
+| `src/simulator/api.py` | L'API FastAPI : `POST /simulation` et `GET /mesures`, ouverte à tous dans la limite de 10 calculs par minute et par adresse IP, documentée sur `/docs` |
+| `tests/` | Tests du moteur, de l'API et de chaque mesure |
 | `Dockerfile` | L'image déployée sur api.anthropolitics.fr |
 | `.github/workflows/ci.yml` | Sur chaque PR et sur `main`, vérifie le lint et le formatage ruff, les types avec mypy, lance les tests avec au moins 90 % de couverture, construit l'image Docker et vérifie qu'elle calcule. `main` n'accepte que des PR à jour aux tests verts ; chaque push sur `main` déclenche le déploiement par le webhook GitHub de Coolify |
 
@@ -136,11 +138,11 @@ uv run mypy
 uv run uvicorn simulator.api:app --reload
 ```
 
-La documentation de l'API est alors sur http://localhost:8000/docs. Exemple d'appel :
+La documentation de l'API est alors sur http://localhost:8000/docs et le catalogue des mesures sur http://localhost:8000/mesures. Exemple d'appel :
 
 ```bash
 curl -X POST http://localhost:8000/simulation -H 'Content-Type: application/json' \
-  -d '{"persona": {"salaire_brut_mensuel": 6000}, "scenario": {"taux_troisieme_tranche_ir": 0.35}}'
+  -d '{"persona": {"adultes": [{"au_smic": true}], "enfants": [4], "loyer_mensuel": 650, "code_commune": "69123"}, "scenario": {"mesures": ["smic_1600_net"]}}'
 ```
 
 ## Contribuer
