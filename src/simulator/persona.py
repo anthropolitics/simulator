@@ -68,6 +68,15 @@ def situation(persona: Persona, smic_annuel: dict[str, float]) -> dict:
             individu["apprentissage_contrat_debut"] = {annee: f"{int(ANNEE) - 1}-01-01" for annee in ANNEES}
         individus[nom] = individu
     individus |= {nom: {"date_naissance": {"ETERNITY": f"{int(ANNEE) - age}-01-01"}} for nom, age in zip(petits, persona.enfants)}
+    # Un enfant est français si un parent l'est ; sinon il suit le premier adulte. Sans cela, OpenFisca le croit français et la
+    # condition de nationalité de la prime d'activité, qui regarde tous les membres de la famille, laisse passer des parents étrangers.
+    if petits and all(a.nationalite != "FR" for a in persona.adultes):
+        premier = persona.adultes[0]
+        for nom in petits:
+            individus[nom] |= {
+                "nationalite": {annee: premier.nationalite for annee in ANNEES},
+                "duree_possession_titre_sejour": {annee: premier.annees_titre_sejour for annee in ANNEES},
+            }
     menage: dict = {"personne_de_reference": adultes[:1], "conjoint": adultes[1:], "enfants": petits}
     if persona.loyer_mensuel:
         menage |= {

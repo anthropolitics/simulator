@@ -63,6 +63,13 @@ def test_un_retraite_touche_sa_pension_nette():
     assert 1500 * 12 * 0.85 < m["retraite_nette"] < 1500 * 12
 
 
+def test_des_parents_etrangers_sans_titre_de_cinq_ans_n_ont_pas_la_prime_d_activite():
+    def famille(annees):
+        return Persona(adultes=(Adulte(salaire_brut_mensuel=1500, nationalite="MA", annees_titre_sejour=annees),), enfants=(4,))
+
+    assert calculer(LOI_ACTUELLE, famille(2))["minima_sociaux"] == 0 < calculer(LOI_ACTUELLE, famille(6))["minima_sociaux"]
+
+
 def test_net_et_brut_se_correspondent():
     brut = brut_depuis_net(2000)
     assert abs(calculer(LOI_ACTUELLE, seul(brut))["salaire_net"] / 12 - 2000) < 1
