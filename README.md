@@ -138,11 +138,11 @@ uv run mypy
 uv run uvicorn simulator.api:app --reload
 ```
 
-La documentation de l'API est alors sur http://localhost:8000/docs. Exemple d'appel :
+La documentation de l'API est alors sur http://localhost:8000/docs et le catalogue des mesures sur http://localhost:8000/mesures. Exemple d'appel :
 
 ```bash
 curl -X POST http://localhost:8000/simulation -H 'Content-Type: application/json' \
-  -d '{"persona": {"salaire_brut_mensuel": 6000}, "scenario": {"taux_troisieme_tranche_ir": 0.35}}'
+  -d '{"persona": {"adultes": [{"au_smic": true}], "enfants": [4], "loyer_mensuel": 650, "code_commune": "69123"}, "scenario": {"mesures": ["smic_1600_net"]}}'
 ```
 
 ## Contribuer
