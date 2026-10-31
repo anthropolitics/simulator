@@ -18,9 +18,11 @@ class Adulte(BaseModel, frozen=True):
     apprenti: bool = Field(default=False, description="En contrat d'apprentissage depuis un an ; suppose un âge de 16 à 24 ans.")
     annees_travail_france: int = Field(default=0, ge=0, le=70, description="Années travaillées en France, en équivalent temps plein.")
     insertion_15h: bool = Field(default=False, description="Au moins 15 heures par semaine de formation ou de recherche active d'emploi.")
+    age_debut_carriere: int = Field(default=22, ge=14, le=40, description="Âge du premier emploi, pour la retraite : la carrière garde le salaire actuel.")
+    annees_sans_emploi: int = Field(default=0, ge=0, le=40, description="Années de la carrière, passée et à venir, sans trimestre de retraite validé.")
 
 
-class DepensesEnergie(BaseModel, frozen=True):
+class Depenses(BaseModel, frozen=True):
     """Dépenses annuelles TTC du ménage ; un poste absent est imputé selon son niveau de vie (enquête Budget de famille de l'Insee)."""
 
     electricite: float | None = Field(default=None, ge=0, le=100_000)
@@ -28,6 +30,19 @@ class DepensesEnergie(BaseModel, frozen=True):
     fioul: float | None = Field(default=None, ge=0, le=100_000)
     autres_energies_logement: float | None = Field(default=None, ge=0, le=100_000, description="Bois, charbon, chaleur des réseaux.")
     carburants: float | None = Field(default=None, ge=0, le=100_000)
+    hors_energie_taux_normal: float | None = Field(default=None, ge=0, le=1_000_000, description="Reste de la consommation au taux normal de TVA (20 %).")
+    hors_energie_taux_intermediaire: float | None = Field(
+        default=None,
+        ge=0,
+        le=1_000_000,
+        description="Reste de la consommation au taux intermédiaire (10 %) : restaurants, hôtels, transports, médicaments non remboursables.",
+    )
+    hors_energie_taux_reduit: float | None = Field(
+        default=None, ge=0, le=1_000_000, description="Reste de la consommation au taux réduit (5,5 %) : alimentation, eau, livres."
+    )
+    hors_energie_taux_particulier: float | None = Field(
+        default=None, ge=0, le=1_000_000, description="Reste de la consommation au taux particulier (2,1 %) : presse."
+    )
 
 
 class Persona(BaseModel, frozen=True):
@@ -38,7 +53,7 @@ class Persona(BaseModel, frozen=True):
     patrimoine_financier: float = Field(default=0, ge=0, description="Patrimoine financier net du foyer.")
     patrimoine_immobilier: float = Field(default=0, ge=0, description="Patrimoine immobilier net du foyer, résidence principale comprise.")
     residence_principale: float = Field(default=0, ge=0, description="Valeur nette de la résidence principale, comprise dans le patrimoine immobilier.")
-    depenses_energie: DepensesEnergie = Field(default_factory=DepensesEnergie)
+    depenses: Depenses = Field(default_factory=Depenses)
 
     @model_validator(mode="before")
     @classmethod
@@ -117,7 +132,7 @@ def situation(persona: Persona, smic: dict[str, float], smic_actuel: dict[str, f
             "depcom": {annee: persona.code_commune for annee in ANNEES},
             "statut_occupation_logement": {annee: "locataire_vide" for annee in ANNEES},
         }
-    menage |= {f"depense_{poste}": {ANNEE: montant} for poste, montant in persona.depenses_energie if montant is not None}
+    menage |= {f"depense_{poste}": {ANNEE: montant} for poste, montant in persona.depenses if montant is not None}
     foyer: dict = {"declarants": adultes, "personnes_a_charge": petits}
     if persona.patrimoine_financier or persona.patrimoine_immobilier:
         foyer |= {

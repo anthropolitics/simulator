@@ -1,6 +1,6 @@
 from openfisca_core.model_api import Variable
 
-from simulator.consommation import POSTES
+from simulator.consommation import ENERGIE
 from simulator.mesures import Mesure
 
 TAUX = 0.055
@@ -14,7 +14,7 @@ def taux_reduit(poste: str) -> type[Variable]:
 
 
 def appliquer(reforme):
-    for poste in POSTES:
+    for poste in ENERGIE:
         reforme.update_variable(taux_reduit(poste))
 
 

@@ -47,6 +47,13 @@ def limiter(request: Request):
     recents.append(maintenant)
 
 
+class Retraite(BaseModel):
+    age_annees: int = Field(description="Âge de départ au taux plein, en années et mois.")
+    age_mois: int
+    pension_mensuelle: int = Field(description="Pension brute du régime général et de l'Agirc-Arrco au départ, en euros de 2025.")
+    cumul: int = Field(description="Pensions brutes sur l'espérance de vie à l'âge de départ, sans actualisation.")
+
+
 class Montants(BaseModel):
     salaire_net: int
     retraite_nette: int
@@ -60,13 +67,20 @@ class Montants(BaseModel):
     prestations_mesures: int = Field(description="Prestations créées par les mesures du scénario, comptées dans les prestations sociales.")
     prestations_sociales: int
     revenu_disponible: int
-    tva: int = Field(description="Négatif : TVA payée sur l'énergie, hors du revenu disponible.")
+    tva: int = Field(description="Négatif : TVA payée sur la consommation, hors du revenu disponible.")
     cout_du_travail: int = Field(description="Ce que l'emploi des adultes coûte à leurs employeurs.")
-    depense_electricite: int = Field(description="Dépenses d'énergie TTC aux prix de la loi actuelle, saisies ou imputées ; le scénario les garde.")
+    depense_electricite: int = Field(description="Dépenses de consommation TTC aux prix de la loi actuelle, saisies ou imputées ; le scénario les garde.")
     depense_gaz: int
     depense_fioul: int
     depense_autres_energies_logement: int
     depense_carburants: int
+    depense_hors_energie_taux_normal: int
+    depense_hors_energie_taux_intermediaire: int
+    depense_hors_energie_taux_reduit: int
+    depense_hors_energie_taux_particulier: int
+    retraites: list[Retraite | None] = Field(
+        description="Pour chaque adulte, dans l'ordre : son départ au taux plein ; vide s'il n'a pas de salaire, touche déjà une retraite ou est né avant 1961."
+    )
 
 
 class Simulation(BaseModel):
@@ -80,7 +94,7 @@ class Resultat(BaseModel):
     avant: Montants = Field(description="Loi actuelle, en euros par an.")
     apres: Montants = Field(description="Avec le scénario, en euros par an.")
     ecart_revenu_disponible: int
-    ecart_pouvoir_achat: int = Field(description="Écart du revenu disponible et de la TVA payée sur l'énergie.")
+    ecart_pouvoir_achat: int = Field(description="Écart du revenu disponible et de la TVA payée sur la consommation.")
     versions: dict[str, str] = Field(description="Versions du code qui a produit le résultat, pour le rejouer.")
 
 
@@ -97,7 +111,7 @@ class MesureDecrite(BaseModel):
 
 @app.get("/mesures", response_model=list[MesureDecrite])
 def mesures() -> list[dict]:
-    return [{k: v for k, v in vars(m).items() if k != "appliquer"} for m in CATALOGUE.values()]
+    return [{k: v for k, v in vars(m).items() if k not in ("appliquer", "retraites")} for m in CATALOGUE.values()]
 
 
 @app.post("/simulation", response_model=Resultat, dependencies=[Depends(limiter)])

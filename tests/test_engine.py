@@ -1,14 +1,15 @@
 from concurrent.futures.process import BrokenProcessPool
+from dataclasses import replace
 
 import pytest
 from openfisca_core.model_api import YEAR, Variable
 from openfisca_france.entities import Famille, FoyerFiscal
 
 from simulator import engine
-from simulator.consommation import decile, depenses_imputees
-from simulator.engine import LOI_ACTUELLE, TAUX_ACTUEL, Scenario, brut_depuis_net, calculer, loi, simuler
+from simulator.consommation import CODES_2017, DEPENSES_2017, decile, depenses_imputees
+from simulator.engine import LOI_ACTUELLE, SMIC_ACTUEL, TAUX_ACTUEL, Scenario, brut_depuis_net, calculer, loi, parametres_retraite, retraites, simuler
 from simulator.mesures import CATALOGUE, Mesure, ajouter_impot, ajouter_prestation
-from simulator.persona import Adulte, DepensesEnergie, Persona
+from simulator.persona import Adulte, Depenses, Persona
 
 
 def seul(salaire, enfants=()):
@@ -122,9 +123,25 @@ def test_le_decile_de_niveau_de_vie():
 
 
 def test_une_depense_absente_est_imputee_selon_le_niveau_de_vie():
-    m = calculer(LOI_ACTUELLE, Persona(adultes=(Adulte(au_smic=True),), depenses_energie=DepensesEnergie(electricite=1800)))
+    m = calculer(LOI_ACTUELLE, Persona(adultes=(Adulte(au_smic=True),), depenses=Depenses(electricite=1800)))
     imputees = depenses_imputees(m["revenu_disponible"])  # une personne seule compte pour une unité de consommation
     assert m["depense_electricite"] == 1800 and m["depense_carburants"] == imputees["carburants"] > 0
+
+
+def test_imputation_hors_energie_d_un_menage_du_premier_decile():
+    imputees, prix = depenses_imputees(5_000), 120.95 / 101.22  # euros de 2017 portés à 2025 par l'indice d'ensemble
+    assert imputees["hors_energie_taux_particulier"] == round(32 * prix)  # presse (09521)
+    # Pharmacie (0611Z), transports (073ZZ), horticulture (09321), services culturels (0942Z), restauration (11111, 11112, 1113Z), hébergement (11211).
+    assert imputees["hors_energie_taux_intermediaire"] == round((139 + 457 + 71 + 290 + 150 + 274 + 81 + 88) * prix)
+
+
+def test_la_consommation_hors_energie_exclut_l_energie_et_complete_le_total_de_l_insee():
+    ctotale = (16123, 18322, 20071, 22638, 23787, 27081, 29059, 32645, 35867, 48353)  # TF106, total de la consommation, déciles 1 à 10
+    assert not [code for code in CODES_2017 if code.startswith("045") or code == "07221"]
+    for i, total in enumerate(ctotale):
+        energie = DEPENSES_2017["energie_logement"][i] + DEPENSES_2017["carburants"][i]
+        assert energie + sum(valeurs[i] for taux, valeurs in CODES_2017.values() if taux) <= total
+        assert energie + sum(valeurs[i] for _, valeurs in CODES_2017.values()) == pytest.approx(total, abs=5)  # arrondis du TF106
 
 
 def test_le_scenario_garde_la_consommation_de_la_loi_actuelle():
@@ -199,3 +216,22 @@ def test_un_processus_de_calcul_tue_est_relance():
         except BrokenProcessPool:
             pass
     raise AssertionError("le processus de calcul n'a pas été relancé")
+
+
+def test_chaque_salarie_a_son_depart_a_la_retraite():
+    couple = Persona(adultes=(Adulte(age=40, au_smic=True, age_debut_carriere=21), Adulte(age=70, retraite_brute_mensuelle=1500)))
+    salarie, retraite = simuler(couple, Scenario())["avant"]["retraites"]
+    # Né en 1985, début à 21 ans au SMIC : 172 trimestres à 64 ans (voir test_retraites).
+    assert (salarie["age_annees"], salarie["age_mois"], salarie["pension_mensuelle"]) == (64, 0, 1243) and retraite is None
+
+
+def test_une_mesure_change_les_parametres_de_retraite(monkeypatch):
+    def a_62_ans(parametres):
+        return replace(parametres, age_legal_cible=62 * 12, duree_requise_cible=168)
+
+    # Les processus de calcul ne voient pas une mesure ajoutée par le test : le calcul de la retraite se fait ici.
+    monkeypatch.setitem(CATALOGUE, "test_62", Mesure(id="test_62", titre="", candidats=(), source="", citation="", traduction="", retraites=a_62_ans))
+    persona = Persona(adultes=(Adulte(age=40, salaire_brut_mensuel=3000, age_debut_carriere=20),))
+    (avant,), (apres,) = (retraites(persona, SMIC_ACTUEL, parametres_retraite(Scenario(mesures=m))) for m in ((), ("test_62",)))
+    # Début à 20 ans : carrière longue à 63 ans aujourd'hui ; 168 trimestres à 62 ans avec la mesure.
+    assert (avant["age_annees"], apres["age_annees"]) == (63, 62) and apres["cumul"] > avant["cumul"]
