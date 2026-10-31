@@ -20,6 +20,16 @@ class Adulte(BaseModel, frozen=True):
     insertion_15h: bool = Field(default=False, description="Au moins 15 heures par semaine de formation ou de recherche active d'emploi.")
 
 
+class DepensesEnergie(BaseModel, frozen=True):
+    """Dépenses annuelles TTC du ménage ; un poste absent est imputé selon son niveau de vie (enquête Budget de famille de l'Insee)."""
+
+    electricite: float | None = Field(default=None, ge=0, le=100_000)
+    gaz: float | None = Field(default=None, ge=0, le=100_000)
+    fioul: float | None = Field(default=None, ge=0, le=100_000)
+    autres_energies_logement: float | None = Field(default=None, ge=0, le=100_000, description="Bois, charbon, chaleur des réseaux.")
+    carburants: float | None = Field(default=None, ge=0, le=100_000)
+
+
 class Persona(BaseModel, frozen=True):
     adultes: tuple[Adulte, ...] = Field(min_length=1, max_length=2, description="Deux adultes forment un couple marié.")
     enfants: tuple[int, ...] = Field(default=(), max_length=6, description="Âge de chaque enfant à charge.")
@@ -28,6 +38,7 @@ class Persona(BaseModel, frozen=True):
     patrimoine_financier: float = Field(default=0, ge=0, description="Patrimoine financier net du foyer.")
     patrimoine_immobilier: float = Field(default=0, ge=0, description="Patrimoine immobilier net du foyer, résidence principale comprise.")
     residence_principale: float = Field(default=0, ge=0, description="Valeur nette de la résidence principale, comprise dans le patrimoine immobilier.")
+    depenses_energie: DepensesEnergie = Field(default_factory=DepensesEnergie)
 
     @model_validator(mode="before")
     @classmethod
@@ -106,6 +117,7 @@ def situation(persona: Persona, smic: dict[str, float], smic_actuel: dict[str, f
             "depcom": {annee: persona.code_commune for annee in ANNEES},
             "statut_occupation_logement": {annee: "locataire_vide" for annee in ANNEES},
         }
+    menage |= {f"depense_{poste}": {ANNEE: montant} for poste, montant in persona.depenses_energie if montant is not None}
     foyer: dict = {"declarants": adultes, "personnes_a_charge": petits}
     if persona.patrimoine_financier or persona.patrimoine_immobilier:
         foyer |= {

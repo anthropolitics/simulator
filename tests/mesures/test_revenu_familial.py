@@ -1,7 +1,7 @@
 import pytest
 
 from simulator.engine import LOI_ACTUELLE, Scenario, calculer, loi
-from simulator.persona import Adulte, Persona
+from simulator.persona import Adulte, DepensesEnergie, Persona
 
 MESURE = loi(Scenario(mesures=("revenu_familial",)))
 
@@ -47,6 +47,8 @@ def test_un_parent_francais_ou_etranger_avec_cinq_ans_de_titre_de_sejour_et_de_t
 
 
 def test_sous_cinq_ans_de_travail_un_etranger_perd_le_revenu_familial_et_seulement_lui():
-    sous, dessus = (calculer(MESURE, Persona(adultes=(etranger(annees_travail_france=n),), enfants=(5, 10))) for n in (4, 5))
+    # Dépenses d'énergie fixées : imputées, elles suivraient le niveau de vie de chaque ménage.
+    energie = DepensesEnergie(electricite=1000, gaz=0, fioul=0, autres_energies_logement=0, carburants=1000)
+    sous, dessus = (calculer(MESURE, Persona(adultes=(etranger(annees_travail_france=n),), enfants=(5, 10), depenses_energie=energie)) for n in (4, 5))
     perdu = {"prestations_mesures", "prestations_sociales", "revenu_disponible"}
     assert {sortie: dessus[sortie] - sous[sortie] for sortie in dessus} == {sortie: 2 * 240 * 12 * (sortie in perdu) for sortie in dessus}

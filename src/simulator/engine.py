@@ -14,8 +14,9 @@ from openfisca_france import FranceTaxBenefitSystem
 from openfisca_france.entities import Famille, FoyerFiscal, Individu, Menage
 from pydantic import BaseModel, Field, field_validator
 
+from simulator.consommation import POSTES, TAUX_DU_POSTE, depenses_imputees
 from simulator.mesures import CATALOGUE, vers_famille, vers_menage
-from simulator.persona import ANNEE, ANNEES, HEURES_TEMPS_PLEIN, Adulte, Persona, situation
+from simulator.persona import ANNEE, ANNEES, HEURES_TEMPS_PLEIN, Adulte, DepensesEnergie, Persona, situation
 
 # Montants annuels du ménage rendus pour chaque législation. Les impôts sont négatifs : ce que le foyer paie.
 SORTIES = (
@@ -31,7 +32,9 @@ SORTIES = (
     "prestations_mesures",
     "prestations_sociales",
     "revenu_disponible",
+    "tva",
     "cout_du_travail",
+    *(f"depense_{poste}" for poste in POSTES),
 )
 VARIABLES_SORTIES = {"impot_revenu": "irpp_economique"}
 VERSIONS = {paquet: version(paquet) for paquet in ("simulator", "openfisca-france")}
@@ -40,6 +43,32 @@ VERSIONS = {paquet: version(paquet) for paquet in ("simulator", "openfisca-franc
 def _appeler(formule, entite, period, parameters):
     # OpenFisca accepte des formules à deux ou trois arguments.
     return formule(entite, period, parameters) if formule.__code__.co_argcount == 3 else formule(entite, period)
+
+
+def _taux_tva(nom: str):
+    def formula(menage, period, parameters):
+        return menage.empty_array() + getattr(parameters(period).taxation_indirecte.tva, nom)
+
+    return formula
+
+
+def _variables_tva(loi) -> list[type[Variable]]:
+    """Dépense TTC et taux de TVA de chaque poste d'énergie, que les mesures changent, et la TVA que le ménage paie dessus."""
+    taux_actuels = {poste: getattr(loi.parameters(f"{ANNEE}-01-01").taxation_indirecte.tva, TAUX_DU_POSTE[poste]) for poste in POSTES}
+    commun = {"value_type": float, "entity": Menage, "definition_period": YEAR}
+    variables = []
+    for poste in POSTES:
+        variables.append(type(f"depense_{poste}", (Variable,), commun | {"label": f"Dépense annuelle TTC du poste {poste}, aux prix de la loi actuelle"}))
+        variables.append(
+            type(f"taux_tva_{poste}", (Variable,), commun | {"label": f"Taux de TVA du poste {poste}", "formula": _taux_tva(TAUX_DU_POSTE[poste])})
+        )
+
+    def formula(menage, period):
+        # Dépenses en volume fixe : le prix hors taxe ne change pas et toute variation de taux passe dans le prix payé.
+        return -sum(menage(f"depense_{p}", period) / (1 + taux_actuels[p]) * menage(f"taux_tva_{p}", period) for p in POSTES)
+
+    variables.append(type("tva", (Variable,), commun | {"label": "TVA payée sur l'énergie", "formula": formula}))
+    return variables
 
 
 def _avec_crochets(loi):
@@ -112,7 +141,15 @@ def _avec_crochets(loi):
         name = "Loi actuelle"
 
         def apply(self):
-            for variable in (impots_mesures, prestations_mesures, patrimoine_financier, patrimoine_immobilier, annees_travail_france, insertion_15h):
+            for variable in (
+                impots_mesures,
+                prestations_mesures,
+                patrimoine_financier,
+                patrimoine_immobilier,
+                annees_travail_france,
+                insertion_15h,
+                *_variables_tva(loi),
+            ):
                 self.add_variable(variable)
             self.update_variable(impots_directs)
             self.update_variable(prestations_sociales)
@@ -216,6 +253,10 @@ def calculer(legislation, persona: Persona) -> dict[str, int]:
         premiere = SimulationBuilder().build_from_entities(legislation, situation(persona, smic_annuel(legislation), SMIC_ACTUEL))
         foyer["foyers_fiscaux"]["foyer"]["rfr"] = {str(int(ANNEE) - 2): float(premiere.calculate("rfr", ANNEES[0])[0])}
     simulation = SimulationBuilder().build_from_entities(legislation, foyer)
+    if manquantes := [poste for poste, montant in persona.depenses_energie if montant is None]:
+        imputees = depenses_imputees(float(simulation.calculate("niveau_de_vie", ANNEE)[0]))
+        for poste in manquantes:
+            simulation.set_input(f"depense_{poste}", ANNEE, [imputees[poste]])
     return {sortie: round(float(simulation.calculate_add(VARIABLES_SORTIES.get(sortie, sortie), ANNEE).sum())) for sortie in SORTIES}
 
 
@@ -250,17 +291,24 @@ def lancer(role: str, scenario: Scenario, persona: Persona):
             return PROCESSUS[role].submit(calculer_selon, scenario, persona)
 
 
+@lru_cache(maxsize=1024)
+def actuelle(persona: Persona) -> dict[str, int]:
+    return lancer("loi actuelle", Scenario(), persona).result()
+
+
 @lru_cache(maxsize=4096)  # mêmes entrées, même résultat : les valeurs par défaut du site ne se calculent qu'une fois
 def simuler(persona: Persona, scenario: Scenario) -> dict:
     """Montants annuels du foyer selon la loi actuelle et selon le scénario."""
-    avant = lancer("loi actuelle", Scenario(), persona)
-    apres = avant if scenario.neutre else lancer("scenario", scenario, persona)
-    avant, apres = avant.result(), apres.result()
+    avant = actuelle(persona)
+    # Le scénario garde la consommation de la loi actuelle : une mesure ne la change que par les prix (incidence statique).
+    depenses = DepensesEnergie(**{poste: avant[f"depense_{poste}"] for poste in POSTES})
+    apres = avant if scenario.neutre else lancer("scenario", scenario, persona.model_copy(update={"depenses_energie": depenses})).result()
     return {
         "annee": int(ANNEE),
         "mesures": list(scenario.mesures),
         "avant": avant,
         "apres": apres,
         "ecart_revenu_disponible": apres["revenu_disponible"] - avant["revenu_disponible"],
+        "ecart_pouvoir_achat": apres["revenu_disponible"] + apres["tva"] - avant["revenu_disponible"] - avant["tva"],
         "versions": VERSIONS,
     }

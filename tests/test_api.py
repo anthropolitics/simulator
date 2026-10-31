@@ -9,7 +9,7 @@ def test_simulation():
     r = client.post("/simulation", json={"persona": {"salaire_brut_mensuel": 3000, "enfants": 1}, "scenario": {"taux_troisieme_tranche_ir": 0.35}})
     assert r.status_code == 200
     body = r.json()
-    assert set(body) == {"annee", "mesures", "avant", "apres", "ecart_revenu_disponible", "versions"}
+    assert set(body) == {"annee", "mesures", "avant", "apres", "ecart_revenu_disponible", "ecart_pouvoir_achat", "versions"}
     assert body["versions"]["openfisca-france"]
 
 

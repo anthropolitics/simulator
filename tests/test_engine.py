@@ -5,9 +5,10 @@ from openfisca_core.model_api import YEAR, Variable
 from openfisca_france.entities import Famille, FoyerFiscal
 
 from simulator import engine
+from simulator.consommation import decile, depenses_imputees
 from simulator.engine import LOI_ACTUELLE, TAUX_ACTUEL, Scenario, brut_depuis_net, calculer, loi, simuler
 from simulator.mesures import CATALOGUE, Mesure, ajouter_impot, ajouter_prestation
-from simulator.persona import Adulte, Persona
+from simulator.persona import Adulte, DepensesEnergie, Persona
 
 
 def seul(salaire, enfants=()):
@@ -113,6 +114,22 @@ def test_pas_d_ifi_jusqu_a_1_3_million():
     persona = Persona(adultes=(Adulte(salaire_brut_mensuel=6000),), patrimoine_immobilier=1_200_000)
     m = calculer(LOI_ACTUELLE, persona)
     assert m["impots_directs"] == m["impot_revenu"]
+
+
+def test_le_decile_de_niveau_de_vie():
+    # 16 680 € et 18 990 € de 2018 bornent le 4e décile ; en euros de 2025, un niveau de vie de 20 000 € y tombe.
+    assert (decile(5_000), decile(20_000), decile(100_000)) == (1, 4, 10)
+
+
+def test_une_depense_absente_est_imputee_selon_le_niveau_de_vie():
+    m = calculer(LOI_ACTUELLE, Persona(adultes=(Adulte(au_smic=True),), depenses_energie=DepensesEnergie(electricite=1800)))
+    imputees = depenses_imputees(m["revenu_disponible"])  # une personne seule compte pour une unité de consommation
+    assert m["depense_electricite"] == 1800 and m["depense_carburants"] == imputees["carburants"] > 0
+
+
+def test_le_scenario_garde_la_consommation_de_la_loi_actuelle():
+    r = simuler(seul(3000), Scenario(taux_troisieme_tranche_ir=0.31))
+    assert r["apres"]["tva"] == r["avant"]["tva"] and r["ecart_pouvoir_achat"] == r["ecart_revenu_disponible"]
 
 
 def test_la_residence_principale_fait_partie_du_patrimoine_immobilier():
