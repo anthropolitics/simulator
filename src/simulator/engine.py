@@ -2,6 +2,7 @@
 
 from concurrent.futures import ProcessPoolExecutor
 from concurrent.futures.process import BrokenProcessPool
+from copy import deepcopy
 from functools import lru_cache
 from importlib.metadata import version
 from multiprocessing import get_context
@@ -212,6 +213,11 @@ def loi(scenario: Scenario):
 
     class Simulee(Reform):
         name = ", ".join(CATALOGUE[m].titre for m in scenario.mesures) or "Taux de la troisième tranche de l'impôt sur le revenu"
+
+        def modify_parameters(self, modifier_function):
+            # OpenFisca repart des paramètres de la loi de base à chaque appel : seule la dernière mesure compterait. On les enchaîne.
+            self.parameters = modifier_function(deepcopy(self.parameters))
+            self._parameters_at_instant_cache = {}
 
         def apply(self):
             self.impots_ajoutes, self.prestations_ajoutees = [], []

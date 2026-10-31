@@ -9,7 +9,7 @@ from simulator import engine
 from simulator.consommation import CODES_2017, DEPENSES_2017, decile, depenses_imputees
 from simulator.engine import LOI_ACTUELLE, SMIC_ACTUEL, TAUX_ACTUEL, Scenario, brut_depuis_net, calculer, loi, parametres_retraite, retraites, simuler
 from simulator.mesures import CATALOGUE, Mesure, ajouter_impot, ajouter_prestation
-from simulator.persona import Adulte, Depenses, Persona
+from simulator.persona import ANNEE, Adulte, Depenses, Persona
 
 
 def seul(salaire, enfants=()):
@@ -235,3 +235,9 @@ def test_une_mesure_change_les_parametres_de_retraite(monkeypatch):
     (avant,), (apres,) = (retraites(persona, SMIC_ACTUEL, parametres_retraite(Scenario(mesures=m))) for m in ((), ("test_62",)))
     # Début à 20 ans : carrière longue à 63 ans aujourd'hui ; 168 trimestres à 62 ans avec la mesure.
     assert (avant["age_annees"], apres["age_annees"]) == (63, 62) and apres["cumul"] > avant["cumul"]
+
+
+def test_les_parametres_des_mesures_se_cumulent():
+    p = loi(Scenario(mesures=("smic_2000_brut", "tva_sociale"))).parameters(f"{ANNEE}-01-01")
+    assert p.marche_travail.salaire_minimum.smic.smic_b_mensuel == pytest.approx(2000)  # perdu tant que chaque mesure repartait de la loi actuelle
+    assert p.taxation_indirecte.tva.taux_normal == pytest.approx(0.215)
