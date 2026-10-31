@@ -57,5 +57,6 @@ MESURE = Mesure(
         "professionnalisation et les jeunes en formation professionnelle, que le persona ne décrit pas, ne sont pas simulés."
     ),
     appliquer=appliquer,
+    a_confirmer=True,  # document d'une campagne antérieure, que seule une source de 2026 rattache au programme 2027
     hypotheses="Le nombre d'apprentis, les embauches et les salaires versés par les employeurs sont tenus fixes. Le financement n'est pas calculé.",
 )

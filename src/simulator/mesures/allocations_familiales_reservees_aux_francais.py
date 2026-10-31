@@ -42,6 +42,7 @@ MESURE = Mesure(
         "ces prestations dans leurs ressources, sont recalculés sans elles."
     ),
     appliquer=lambda reforme: reserver(reforme, PRESTATIONS_FAMILIALES, un_parent_francais),
+    a_confirmer=True,  # document d'une campagne antérieure, que seule une source de 2026 rattache au programme 2027
     hypotheses=(
         "La seconde partie, la condition de cinq années de travail en France pour les prestations non contributives comme le RSA, n'est pas "
         "simulée : le ménage type ne renseigne pas les années travaillées en France. Le RSA et les autres prestations non contributives des "
