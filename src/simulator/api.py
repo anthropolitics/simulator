@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 
 from simulator import engine
 from simulator.engine import Scenario
+from simulator.menages import MENAGES
 from simulator.mesures import CATALOGUE
 from simulator.persona import Adulte, Persona
 
@@ -107,6 +108,20 @@ class MesureDecrite(BaseModel):
     traduction: str
     a_confirmer: bool = Field(description="Vrai tant que seule une source secondaire porte la mesure.")
     hypotheses: str = Field(description="Les effets que le calcul mécanique laisse de côté.")
+
+
+class MenageDecrit(BaseModel):
+    id: str
+    prenom: str
+    situation: str = Field(description="Métier, ville, foyer.")
+    couleur: str = Field(description="Couleur de la charte, une par ménage.")
+    persona: Persona = Field(description="À envoyer tel quel à POST /simulation.")
+    sources: str = Field(description="La source de chaque valeur, et les choix faits quand elle manque.")
+
+
+@app.get("/menages", response_model=list[MenageDecrit])
+def menages() -> list[dict]:
+    return [vars(m) for m in MENAGES.values()]
 
 
 @app.get("/mesures", response_model=list[MesureDecrite])

@@ -1,6 +1,7 @@
 from fastapi.testclient import TestClient
 
 from simulator.api import LIMITE, app, appels
+from simulator.menages import MENAGES
 
 client = TestClient(app)
 
@@ -34,3 +35,8 @@ def test_mesure_inconnue_refusee():
 def test_catalogue_des_mesures():
     r = client.get("/mesures")
     assert r.status_code == 200 and isinstance(r.json(), list)
+
+
+def test_catalogue_des_menages():
+    r = client.get("/menages")
+    assert r.status_code == 200 and [m["id"] for m in r.json()] == list(MENAGES)
