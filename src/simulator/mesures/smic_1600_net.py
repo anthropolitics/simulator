@@ -31,7 +31,7 @@ MESURE = Mesure(
         "2 021,22 €. Le calendrier (en deux ans pour Raphaël Glucksmann) n'est pas simulé : la cible s'applique d'emblée. Pour François Ruffin, le "
         "rapport n'indique pas net ou brut ; 1 600 € brut étant inférieur au SMIC brut de 2025, le montant est lu comme net. Les dispositifs de la "
         "loi actuelle qui se réfèrent au SMIC (allègements de cotisations patronales, prime d'activité, apprentissage, etc.) suivent le nouveau "
-        "montant. Seul le salaire d'un adulte déclaré au SMIC change ; un salaire saisi en brut reste fixe, même sous le nouveau SMIC."
+        "montant. Un salaire déclaré au SMIC suit le nouveau montant ; un salaire à temps plein qui passe sous le nouveau SMIC y est relevé, comme la loi l'impose ; les autres salaires restent fixes."
     ),
     appliquer=appliquer,
     a_confirmer=True,

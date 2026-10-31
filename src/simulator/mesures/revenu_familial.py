@@ -5,6 +5,7 @@ from simulator.mesures import Mesure, ajouter_prestation
 
 MONTANT_PAR_ENFANT = 240
 AGE_LIMITE = 18
+DUREE = 5  # années de titre de séjour et de travail en France exigées d'un parent étranger
 # Allocations familiales (majoration pour âge comprise), complément familial, allocation de rentrée scolaire, enfants du RSA et de la prime d'activité.
 REMPLACEES = ("af", "cf", "ars", "rsa_nb_enfants")
 
@@ -16,7 +17,11 @@ class revenu_familial(Variable):
     label = "Revenu familial"
 
     def formula(famille, period):
-        return MONTANT_PAR_ENFANT * famille.sum(famille.members("age", period) < AGE_LIMITE, role=Famille.ENFANT)
+        individu = famille.members
+        francais = individu("nationalite", period) == b"FR"
+        resident_actif = (individu("duree_possession_titre_sejour", period) >= DUREE) * (individu("annees_travail_france", period.this_year) >= DUREE)
+        droit = famille.any(francais + resident_actif, role=Famille.PARENT)
+        return droit * MONTANT_PAR_ENFANT * famille.sum(individu("age", period) < AGE_LIMITE, role=Famille.ENFANT)
 
 
 def appliquer(reforme):
@@ -58,11 +63,19 @@ MESURE = Mesure(
         "enf3_et_sup et isol) passent à zéro au 1er janvier 2025. Un enfant à charge de 18 ans ou plus perd ces dispositifs sans recevoir le Revenu "
         "familial. La réduction d'impôt pour frais de scolarité, les bourses et le supplément familial de traitement ne concernent pas le persona, "
         "qui ne déclare ni scolarité ni emploi public. Le doublement pour le troisième enfant mineur (proposition 2 du même livret) n'est pas inclus. "
-        "La condition de cinq ans de résidence et d'activité n'est pas appliquée ici."
+        "Le livret réserve la condition de résidence et d'activité aux étrangers : « pour bénéficier pleinement des dispositifs familiaux, les "
+        "ressortissants étrangers devront justifier de cinq années de résidence en France et d'exercice d'une activité professionnelle » (p. 4). "
+        "Le Revenu familial est donc versé si un parent est français, ou si un parent étranger a au moins cinq ans de titre de séjour et au moins "
+        "cinq années travaillées en France, en équivalent temps plein, sans exiger un emploi en cours. Le livret ne dit pas si, dans un couple, la "
+        "condition vaut pour chaque parent ou pour l'un d'eux : il suffit ici qu'un parent la remplisse, comme il suffit qu'un parent soit "
+        "français. Les ressortissants de l'Union européenne, que la source ne distingue pas, sont traités comme les autres étrangers. Une famille "
+        "qui ne remplit pas la condition ne reçoit ni le Revenu familial ni les dispositifs qu'il remplace ; le livret, qui écrit « pleinement », "
+        "ne dit pas ce qu'elle conserverait."
     ),
     appliquer=appliquer,
     hypotheses=(
-        "Les effets sur la natalité, l'activité des parents et le recours aux prestations ne sont pas simulés, pas plus que le financement et les "
-        "économies de gestion annoncés."
+        "La suspension temporaire par décision de justice en cas de défaillance éducative n'est pas simulée : le ménage type ne décrit aucune "
+        "décision de justice. Les effets sur la natalité, l'activité des parents et le recours aux prestations ne sont pas simulés, pas plus que le "
+        "financement et les économies de gestion annoncés."
     ),
 )
