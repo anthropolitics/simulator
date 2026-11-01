@@ -21,3 +21,8 @@ def test_une_ligne_par_candidat_et_par_menage(monkeypatch):
     # Début à 22 ans au SMIC : 65 ans aujourd'hui, 63 ans avec la mesure (164 trimestres pour un début à 22 ans).
     assert (ligne["retraites"][0]["avant"]["age_annees"], ligne["retraites"][0]["apres"]["age_annees"]) == (65, 63)
     assert t["programmes"][0]["mesures"][0] | {"titre": ""} == {"id": "retraite_62_ans_60_ans_carrieres_longues", "titre": "", "a_confirmer": True}
+    # Le détail par poste refait l'écart : revenu disponible et TVA, avant et après.
+    avant, apres = ligne["avant"], ligne["apres"]
+    assert set(avant) == set(tableau.POSTES)
+    assert apres["revenu_disponible"] + apres["tva"] - avant["revenu_disponible"] - avant["tva"] == ligne["ecart_pouvoir_achat"]
+    assert t["menages"][0]["persona"]["adultes"][0]["au_smic"] is True
