@@ -1,11 +1,13 @@
 """API publique du simulateur : https://api.anthropolitics.fr/docs"""
 
+import json
 from collections import defaultdict, deque
 from contextlib import asynccontextmanager
 from time import monotonic
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from simulator import engine
@@ -13,6 +15,7 @@ from simulator.engine import Scenario
 from simulator.menages import MENAGES
 from simulator.mesures import CATALOGUE
 from simulator.persona import Adulte, Persona
+from simulator.tableau import ligne, programmes
 
 
 @asynccontextmanager
@@ -36,16 +39,27 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["GET", "P
 # shortcut: compteur en mémoire, par processus, jamais purgé des adresses passées ; passer au proxy ou à Redis si le trafic grossit.
 LIMITE, FENETRE = 10, 60  # calculs par adresse IP et par minute : un calcul occupe un cœur pendant plusieurs secondes
 appels: dict[str, deque] = defaultdict(deque)
+# Un calcul de tous les programmes enchaîne treize simulations : il coûte bien plus qu'un /simulation et mérite sa propre limite.
+PROGRAMMES_LIMITE, PROGRAMMES_FENETRE = 2, 60
+appels_programmes: dict[str, deque] = defaultdict(deque)
+
+
+def _limiter(request: Request, recents: deque, limite: int, fenetre: int):
+    # Sans adresse (socket Unix), les appels partagent un même compteur.
+    maintenant = monotonic()
+    while recents and maintenant - recents[0] > fenetre:
+        recents.popleft()
+    if len(recents) >= limite:
+        raise HTTPException(429, "Trop de calculs : réessayez dans une minute.", headers={"Retry-After": str(fenetre)})
+    recents.append(maintenant)
 
 
 def limiter(request: Request):
-    # Sans adresse (socket Unix), les appels partagent un même compteur.
-    maintenant, recents = monotonic(), appels[request.client.host if request.client else ""]
-    while recents and maintenant - recents[0] > FENETRE:
-        recents.popleft()
-    if len(recents) >= LIMITE:
-        raise HTTPException(429, "Trop de calculs : réessayez dans une minute.", headers={"Retry-After": str(FENETRE)})
-    recents.append(maintenant)
+    _limiter(request, appels[request.client.host if request.client else ""], LIMITE, FENETRE)
+
+
+def limiter_programmes(request: Request):
+    _limiter(request, appels_programmes[request.client.host if request.client else ""], PROGRAMMES_LIMITE, PROGRAMMES_FENETRE)
 
 
 class Retraite(BaseModel):
@@ -87,6 +101,10 @@ class Montants(BaseModel):
 class Simulation(BaseModel):
     persona: Persona
     scenario: Scenario
+
+
+class DemandeProgrammes(BaseModel):
+    persona: Persona = Field(description="Votre foyer, tel qu'il serait envoyé à POST /simulation.")
 
 
 class Resultat(BaseModel):
@@ -132,3 +150,25 @@ def mesures() -> list[dict]:
 @app.post("/simulation", response_model=Resultat, dependencies=[Depends(limiter)])
 def simulation(demande: Simulation) -> dict:  # FastAPI valide le dict du moteur contre Resultat
     return engine.simuler(demande.persona, demande.scenario)
+
+
+@app.post(
+    "/programmes",
+    dependencies=[Depends(limiter_programmes)],
+    response_class=StreamingResponse,
+    responses={200: {"content": {"application/x-ndjson": {}}, "description": "Une ligne JSON par candidat, dans l'ordre alphabétique."}},
+)
+def programmes_persona(demande: DemandeProgrammes) -> StreamingResponse:
+    """Ce que le programme de chaque candidat change pour un foyer saisi, une ligne JSON par candidat.
+
+    Le calcul enchaîne les treize programmes : la réponse est diffusée au fil de l'eau pour que la page affiche
+    les résultats dès qu'ils sont prêts, plutôt qu'après une attente de plusieurs dizaines de secondes.
+    """
+    return StreamingResponse(
+        (
+            json.dumps(ligne(candidat, "vous", engine.simuler(demande.persona, Scenario(mesures=mesures))), ensure_ascii=False) + "\n"
+            for candidat, mesures in programmes().items()
+        ),
+        media_type="application/x-ndjson",
+        headers={"Cache-Control": "no-store"},
+    )

@@ -27,22 +27,24 @@ def programmes() -> dict[str, tuple[str, ...]]:
 POSTES = ("salaire_net", "retraite_nette", "impots_directs", "prestations_sociales", "revenu_disponible", "tva")
 
 
+def ligne(candidat: str, menage: str, r: dict) -> dict:
+    """Une ligne du tableau : ce que le programme d'un candidat change pour un ménage, poste par poste."""
+    return {
+        "candidat": candidat,
+        "menage": menage,
+        "ecart_pouvoir_achat": r["ecart_pouvoir_achat"],
+        "ecart_revenu_disponible": r["ecart_revenu_disponible"],
+        "avant": {poste: r["avant"][poste] for poste in POSTES},
+        "apres": {poste: r["apres"][poste] for poste in POSTES},
+        "retraites": [avant and {"avant": avant, "apres": apres} for avant, apres in zip(r["avant"]["retraites"], r["apres"]["retraites"])],
+    }
+
+
 def tableau() -> dict:
     resultats = []
     for candidat, mesures in programmes().items():  # le candidat d'abord : la réforme de son programme ne se construit qu'une fois
         for menage in MENAGES.values():
-            r = simuler(menage.persona, Scenario(mesures=mesures))
-            resultats.append(
-                {
-                    "candidat": candidat,
-                    "menage": menage.id,
-                    "ecart_pouvoir_achat": r["ecart_pouvoir_achat"],
-                    "ecart_revenu_disponible": r["ecart_revenu_disponible"],
-                    "avant": {poste: r["avant"][poste] for poste in POSTES},
-                    "apres": {poste: r["apres"][poste] for poste in POSTES},
-                    "retraites": [avant and {"avant": avant, "apres": apres} for avant, apres in zip(r["avant"]["retraites"], r["apres"]["retraites"])],
-                }
-            )
+            resultats.append(ligne(candidat, menage.id, simuler(menage.persona, Scenario(mesures=mesures))))
     # Le commit qui a produit le tableau, pour le rejouer ; « -dirty » si le code avait des modifications non commitées.
     commit = subprocess.run(["git", "describe", "--always", "--dirty"], check=True, capture_output=True, text=True).stdout.strip()
     return {
