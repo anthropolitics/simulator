@@ -11,7 +11,7 @@ import sys
 import unicodedata
 
 from simulator.engine import VERSIONS, Scenario, simuler
-from simulator.menages import MENAGES
+from simulator.menages import MENAGES, Menage
 from simulator.mesures import CATALOGUE
 from simulator.persona import ANNEE
 
@@ -27,22 +27,33 @@ def programmes() -> dict[str, tuple[str, ...]]:
 POSTES = ("salaire_net", "retraite_nette", "impots_directs", "prestations_sociales", "revenu_disponible", "tva")
 
 
+def ligne(candidat: str, menage: str, r: dict) -> dict:
+    """Une ligne du tableau : ce que le programme d'un candidat change pour un ménage, poste par poste."""
+    return {
+        "candidat": candidat,
+        "menage": menage,
+        "ecart_pouvoir_achat": r["ecart_pouvoir_achat"],
+        "ecart_revenu_disponible": r["ecart_revenu_disponible"],
+        "avant": {poste: r["avant"][poste] for poste in POSTES},
+        "apres": {poste: r["apres"][poste] for poste in POSTES},
+        "retraites": [avant and {"avant": avant, "apres": apres} for avant, apres in zip(r["avant"]["retraites"], r["apres"]["retraites"])],
+    }
+
+
+def persona_publie(menage: Menage) -> dict:
+    """Le foyer tel que la page le pré-remplit : la commune compte, puisqu'un loyer la rend obligatoire.
+
+    Sans elle, le formulaire pré-rempli est invalide et le calcul ne part pas ; et la commune fixe la zone des aides au logement,
+    donc le foyer saisi ne reproduirait pas le ménage type.
+    """
+    return menage.persona.model_dump(mode="json", include={"adultes", "enfants", "loyer_mensuel", "code_commune"})
+
+
 def tableau() -> dict:
     resultats = []
     for candidat, mesures in programmes().items():  # le candidat d'abord : la réforme de son programme ne se construit qu'une fois
         for menage in MENAGES.values():
-            r = simuler(menage.persona, Scenario(mesures=mesures))
-            resultats.append(
-                {
-                    "candidat": candidat,
-                    "menage": menage.id,
-                    "ecart_pouvoir_achat": r["ecart_pouvoir_achat"],
-                    "ecart_revenu_disponible": r["ecart_revenu_disponible"],
-                    "avant": {poste: r["avant"][poste] for poste in POSTES},
-                    "apres": {poste: r["apres"][poste] for poste in POSTES},
-                    "retraites": [avant and {"avant": avant, "apres": apres} for avant, apres in zip(r["avant"]["retraites"], r["apres"]["retraites"])],
-                }
-            )
+            resultats.append(ligne(candidat, menage.id, simuler(menage.persona, Scenario(mesures=mesures))))
     # Le commit qui a produit le tableau, pour le rejouer ; « -dirty » si le code avait des modifications non commitées.
     commit = subprocess.run(["git", "describe", "--always", "--dirty"], check=True, capture_output=True, text=True).stdout.strip()
     return {
@@ -60,7 +71,7 @@ def tableau() -> dict:
                 "situation": m.situation,
                 "couleur": m.couleur,
                 "sources": m.sources,
-                "persona": m.persona.model_dump(mode="json", include={"adultes", "enfants", "loyer_mensuel"}),
+                "persona": persona_publie(m),
             }
             for m in MENAGES.values()
         ],

@@ -26,3 +26,18 @@ def test_une_ligne_par_candidat_et_par_menage(monkeypatch):
     assert set(avant) == set(tableau.POSTES)
     assert apres["revenu_disponible"] + apres["tva"] - avant["revenu_disponible"] - avant["tva"] == ligne["ecart_pouvoir_achat"]
     assert t["menages"][0]["persona"]["adultes"][0]["au_smic"] is True
+
+
+def test_le_persona_publie_porte_de_quoi_pre_remplir_le_formulaire():
+    # Un loyer sans commune est refusé par Persona : la page pré-remplit le formulaire avec ce persona et le renvoie tel quel, il doit donc la porter.
+    locataire = Menage(
+        id="locataire",
+        prenom="",
+        situation="",
+        couleur="ocre",
+        persona=Persona(adultes=(Adulte(age=40, au_smic=True),), loyer_mensuel=600, code_commune="69123"),
+        sources="",
+    )
+    p = tableau.persona_publie(locataire)
+    assert (p["loyer_mensuel"], p["code_commune"]) == (600, "69123")
+    Persona.model_validate(p)

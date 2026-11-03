@@ -107,7 +107,7 @@ Le moteur calcule l'avant/après d'un ménage type pour un scénario : une ou pl
 | `src/simulator/menages.py` | Les six ménages types, calés sur les statistiques de l'Insee, chaque valeur avec sa source |
 | `src/simulator/tableau.py` | Le tableau publié sur le site : ce que le programme de chaque candidat (ses mesures du catalogue) change pour chaque ménage type |
 | `src/simulator/mesures/` | Le catalogue : un fichier par mesure, avec sa source, la citation exacte, sa traduction en paramètres et les effets que le calcul laisse de côté. Une mesure qui ne s'appuie encore que sur une source secondaire est marquée « à confirmer » |
-| `src/simulator/api.py` | L'API FastAPI : `POST /simulation`, `GET /mesures` et `GET /menages`, ouverte à tous dans la limite de 10 calculs par minute et par adresse IP, documentée sur `/docs` |
+| `src/simulator/api.py` | L'API FastAPI : `POST /simulation`, `POST /programmes` (les treize programmes pour un foyer saisi, une ligne JSON par candidat), `GET /mesures` et `GET /menages`, ouverte à tous dans la limite de 10 calculs par minute et par adresse IP, documentée sur `/docs` |
 | `tests/` | Tests du moteur, de l'API et de chaque mesure |
 | `Dockerfile` | L'image déployée sur api.anthropolitics.fr |
 | `.github/workflows/ci.yml` | Sur chaque PR et sur `main`, vérifie le lint et le formatage ruff, les types avec mypy, lance les tests avec au moins 90 % de couverture, construit l'image Docker et vérifie qu'elle calcule. `main` n'accepte que des PR à jour aux tests verts ; chaque push sur `main` déclenche le déploiement par le webhook GitHub de Coolify |
