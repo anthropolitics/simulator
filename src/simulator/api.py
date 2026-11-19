@@ -82,7 +82,9 @@ class FinancesPubliques(BaseModel):
 
 
 class Montants(BaseModel):
+    salaire_brut: int
     salaire_net: int
+    retraite_brute: int
     retraite_nette: int
     csg: int = Field(description="Négatif : ce que le foyer paie, déjà retranché des revenus nets.")
     impot_revenu: int = Field(description="Négatif : ce que le foyer paie.")

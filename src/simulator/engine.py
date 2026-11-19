@@ -22,7 +22,9 @@ from simulator.retraites import PARAMETRES_ACTUELS, Parametres, depart
 
 # Montants annuels du ménage rendus pour chaque législation. Les impôts sont négatifs : ce que le foyer paie.
 SORTIES = (
+    "salaire_brut",
     "salaire_net",
+    "retraite_brute",
     "retraite_nette",
     "csg",
     "impot_revenu",
@@ -38,7 +40,7 @@ SORTIES = (
     "cout_du_travail",
     *(f"depense_{poste}" for poste in POSTES),
 )
-VARIABLES_SORTIES = {"impot_revenu": "irpp_economique"}
+VARIABLES_SORTIES = {"impot_revenu": "irpp_economique", "salaire_brut": "salaire_de_base"}
 VERSIONS = {paquet: version(paquet) for paquet in ("simulator", "openfisca-france")}
 # Recettes de 2025 des impôts qui peuvent financer une mesure, en milliards d'euros, l'impôt sur le revenu avant crédits d'impôt
 # (Insee, comptes nationaux annuels, base 2020, « Impôts — Données annuelles de 1995 à 2025 », données provisoires,
@@ -271,15 +273,19 @@ def smic_annuel(legislation) -> dict[str, float]:
 SMIC_ACTUEL = smic_annuel(LOI_ACTUELLE)
 
 
-def finances_publiques(verse: float, recu: float) -> dict:
+def finances_publiques(m: dict[str, int]) -> dict:
     """Ce que le foyer verse aux administrations publiques, réparti comme elles dépensent, et ce qu'il en reçoit en argent."""
+    # Versé : cotisations salariales, CSG et CRDS (l'écart du brut au net), impôts directs et TVA ; ni les cotisations des employeurs
+    # (voir cout_du_travail), ni les taxes que le moteur ne calcule pas (carburants, tabac, taxe foncière). Reçu : pensions et prestations.
+    verse = m["salaire_brut"] + m["retraite_brute"] - m["salaire_net"] - m["retraite_nette"] - m["impots_directs"] - m["tva"]
+    recu = m["retraite_brute"] + m["prestations_sociales"]
     # shortcut: un euro versé finance chaque fonction selon son poids dans la dépense de 2024, quel que soit l'impôt ; affecter chaque
     # prélèvement à sa caisse (cotisations vieillesse aux retraites) si le site doit dire où va tel impôt.
     total = sum(DEPENSES_PUBLIQUES.values())
-    return {"verse": round(verse), "depenses": {poste: round(verse * md / total) for poste, md in DEPENSES_PUBLIQUES.items()}, "recu": round(recu)}
+    return {"verse": verse, "depenses": {poste: round(verse * md / total) for poste, md in DEPENSES_PUBLIQUES.items()}, "recu": recu}
 
 
-def calculer(legislation, persona: Persona) -> dict:
+def calculer(legislation, persona: Persona) -> dict[str, int]:
     foyer = situation(persona, smic_annuel(legislation), SMIC_ACTUEL)
     if any(a.retraite_brute_mensuelle for a in persona.adultes):
         # Le taux de CSG sur une pension dépend du revenu fiscal de N-2 ; le calculer dans la même simulation crée une spirale
@@ -292,12 +298,7 @@ def calculer(legislation, persona: Persona) -> dict:
         imputees = depenses_imputees(float(simulation.calculate("niveau_de_vie", ANNEE)[0]))
         for poste in manquantes:
             simulation.set_input(f"depense_{poste}", ANNEE, [imputees[poste]])
-    montants: dict = {sortie: round(float(simulation.calculate_add(VARIABLES_SORTIES.get(sortie, sortie), ANNEE).sum())) for sortie in SORTIES}
-    salaires, pensions = (float(simulation.calculate_add(variable, ANNEE).sum()) for variable in ("salaire_de_base", "retraite_brute"))
-    # Versé : cotisations salariales, CSG et CRDS (l'écart du brut au net), impôts directs et TVA ; ni les cotisations des employeurs
-    # (voir cout_du_travail), ni les taxes que le moteur ne calcule pas (carburants, tabac, taxe foncière). Reçu : pensions et prestations.
-    verse = salaires + pensions - montants["salaire_net"] - montants["retraite_nette"] - montants["impots_directs"] - montants["tva"]
-    return montants | {"finances_publiques": finances_publiques(verse, pensions + montants["prestations_sociales"])}
+    return {sortie: round(float(simulation.calculate_add(VARIABLES_SORTIES.get(sortie, sortie), ANNEE).sum())) for sortie in SORTIES}
 
 
 def parametres_retraite(scenario: Scenario) -> Parametres:
@@ -323,7 +324,11 @@ def retraites(persona: Persona, smic: dict[str, float], parametres: Parametres) 
 
 def calculer_selon(scenario: Scenario, persona: Persona) -> dict:
     legislation = loi(scenario)
-    return calculer(legislation, persona) | {"retraites": retraites(persona, smic_annuel(legislation), parametres_retraite(scenario))}
+    montants = calculer(legislation, persona)
+    return montants | {
+        "retraites": retraites(persona, smic_annuel(legislation), parametres_retraite(scenario)),
+        "finances_publiques": finances_publiques(montants),
+    }
 
 
 def budget(scenario: Scenario, apres: dict) -> dict | None:

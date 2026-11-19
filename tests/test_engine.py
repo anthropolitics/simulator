@@ -289,7 +289,7 @@ def test_le_foyer_verse_ses_prelevements_repartis_comme_la_depense_publique():
     m = simuler(seul(2500), Scenario())["avant"]
     f = m["finances_publiques"]
     # Un salarié seul : l'écart du brut au net (cotisations, CSG, CRDS), ses impôts directs et sa TVA ; il ne reçoit que ses prestations.
-    assert f["verse"] == pytest.approx(2500 * 12 - m["salaire_net"] - m["impots_directs"] - m["tva"], abs=1) and f["recu"] == m["prestations_sociales"]
+    assert f["verse"] == 2500 * 12 - m["salaire_net"] - m["impots_directs"] - m["tva"] and f["recu"] == m["prestations_sociales"]
     assert f["verse"] > -(m["csg"] + m["impots_directs"] + m["tva"]) > 0
     assert set(f["depenses"]) == set(DEPENSES_PUBLIQUES) and sum(f["depenses"].values()) == pytest.approx(f["verse"], abs=len(DEPENSES_PUBLIQUES))
     assert f["depenses"]["charge_de_la_dette"] == round(f["verse"] * 60 / sum(DEPENSES_PUBLIQUES.values())) > 0
@@ -298,7 +298,7 @@ def test_le_foyer_verse_ses_prelevements_repartis_comme_la_depense_publique():
 
 
 def test_un_retraite_recoit_sa_pension_brute_et_verse_ses_prelevements():
-    m = calculer(LOI_ACTUELLE, Persona(adultes=(Adulte(age=70, retraite_brute_mensuelle=1500),)))
+    m = engine.calculer_selon(Scenario(), Persona(adultes=(Adulte(age=70, retraite_brute_mensuelle=1500),)))
     f = m["finances_publiques"]
     assert f["recu"] == 18_000 + m["prestations_sociales"]
-    assert f["verse"] == pytest.approx(18_000 - m["retraite_nette"] - m["impots_directs"] - m["tva"], abs=1)
+    assert f["verse"] == 18_000 - m["retraite_nette"] - m["impots_directs"] - m["tva"]
