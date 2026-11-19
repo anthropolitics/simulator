@@ -7,8 +7,21 @@ from openfisca_france.entities import Famille, FoyerFiscal
 
 from simulator import engine
 from simulator.consommation import CODES_2017, DEPENSES_2017, decile, depenses_imputees
-from simulator.engine import LOI_ACTUELLE, SMIC_ACTUEL, TAUX_ACTUEL, Scenario, brut_depuis_net, calculer, loi, parametres_retraite, retraites, simuler
-from simulator.mesures import CATALOGUE, Mesure, ajouter_impot, ajouter_prestation
+from simulator.engine import (
+    LOI_ACTUELLE,
+    RECETTES,
+    SMIC_ACTUEL,
+    TAUX_ACTUEL,
+    Scenario,
+    brut_depuis_net,
+    budget,
+    calculer,
+    loi,
+    parametres_retraite,
+    retraites,
+    simuler,
+)
+from simulator.mesures import CATALOGUE, Cout, Mesure, ajouter_impot, ajouter_prestation
 from simulator.persona import ANNEE, Adulte, Depenses, Persona
 
 
@@ -241,3 +254,31 @@ def test_les_parametres_des_mesures_se_cumulent():
     p = loi(Scenario(mesures=("smic_2000_brut", "tva_sociale"))).parameters(f"{ANNEE}-01-01")
     assert p.marche_travail.salaire_minimum.smic.smic_b_mensuel == pytest.approx(2000)  # perdu tant que chaque mesure repartait de la loi actuelle
     assert p.taxation_indirecte.tva.taux_normal == pytest.approx(0.215)
+
+
+def test_le_budget_additionne_les_couts_et_les_rapporte_au_foyer(monkeypatch):
+    for id, cout in (("depense", Cout(9, 38.5, "candidat ; institut")), ("recette", Cout(-4, -4, "candidat")), ("muette", None)):
+        monkeypatch.setitem(CATALOGUE, id, Mesure(id=id, titre=id, candidats=(), source="", citation="", traduction="", cout=cout))
+    # Un foyer qui paie un cent-millionième de la TVA et de la CSG du pays, et pas d'impôt sur le revenu.
+    apres = {"tva": -2088, "csg": -1566, "impot_revenu": 0}
+    b = budget(Scenario(mesures=("depense", "recette", "muette")), apres)
+    assert b is not None and b["cout"] == {"bas": 5, "haut": 34.5} and b["non_chiffrees"] == ["muette"]
+    # Financer 5 Md€ par la seule TVA la relève de 5 / 208,8 : le foyer en paie sa part, 50 € ; rien par un impôt qu'il ne paie pas.
+    assert b["contreparties"] == {"tva": {"bas": -50, "haut": -345}, "csg": {"bas": -50, "haut": -345}, "impot_revenu": {"bas": 0, "haut": 0}}
+    assert set(b["contreparties"]) == set(RECETTES)
+    # Une économie se lit dans l'autre sens : ce que le foyer gagnerait si elle lui était rendue.
+    assert budget(Scenario(mesures=("recette",)), apres)["contreparties"]["tva"] == {"bas": 40, "haut": 40}
+    assert budget(Scenario(mesures=("muette",)), apres) is None and budget(Scenario(), apres) is None
+
+
+def test_un_cout_cite_sa_source_et_va_du_plus_bas_au_plus_haut():
+    for bas, haut, source in ((2, 1, "candidat"), (1, 2, "")):
+        with pytest.raises(AssertionError):
+            Cout(bas, haut, source)
+
+
+def test_la_simulation_porte_le_budget_du_scenario():
+    r = simuler(seul(2500), Scenario(mesures=("part_fiscale_deuxieme_enfant",)))
+    assert r["budget"]["cout"] == {"bas": 2.86, "haut": 2.86}
+    assert r["budget"]["contreparties"]["tva"]["haut"] == round(r["apres"]["tva"] * 2.86 / RECETTES["tva"]) < 0
+    assert simuler(seul(2500), Scenario())["budget"] is None

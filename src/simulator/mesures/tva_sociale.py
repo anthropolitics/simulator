@@ -1,4 +1,4 @@
-from simulator.mesures import Mesure
+from simulator.mesures import Cout, Mesure
 
 HAUSSE = 0.015
 
@@ -41,4 +41,5 @@ MESURE = Mesure(
         "au contraire la baisse du coût du travail sur leurs prix hors taxe, la hausse des prix payés serait moindre. Ces effets, comme ceux sur "
         "l'emploi et la compétitivité, ne sont pas calculés."
     ),
+    cout=Cout(0, 0, "Les 10 Md€ de TVA sont rendus en baisse de cotisations patronales, selon le rapport cité : la mesure ne change pas le solde public."),
 )

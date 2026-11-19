@@ -40,6 +40,10 @@ SORTIES = (
 )
 VARIABLES_SORTIES = {"impot_revenu": "irpp_economique"}
 VERSIONS = {paquet: version(paquet) for paquet in ("simulator", "openfisca-france")}
+# Recettes de 2025 des impôts qui peuvent financer une mesure, en milliards d'euros, l'impôt sur le revenu avant crédits d'impôt
+# (Insee, comptes nationaux annuels, base 2020, « Impôts — Données annuelles de 1995 à 2025 », données provisoires,
+# https://www.insee.fr/fr/statistiques/2381408, consulté le 19 novembre 2026).
+RECETTES = {"tva": 208.8, "csg": 156.6, "impot_revenu": 103.6}
 
 
 def _appeler(formule, entite, period, parameters):
@@ -293,6 +297,23 @@ def calculer_selon(scenario: Scenario, persona: Persona) -> dict:
     return calculer(legislation, persona) | {"retraites": retraites(persona, smic_annuel(legislation), parametres_retraite(scenario))}
 
 
+def budget(scenario: Scenario, apres: dict) -> dict | None:
+    """Ce que les mesures chiffrées du scénario coûtent aux finances publiques, et ce que le financer coûterait au foyer selon l'impôt relevé."""
+    couts = {mesure: CATALOGUE[mesure].cout for mesure in scenario.mesures}
+    chiffres = [cout for cout in couts.values() if cout]
+    if not chiffres:
+        return None
+    cout = {borne: round(sum(getattr(c, borne) for c in chiffres), 2) for borne in ("bas", "haut")}
+    # Tous les taux d'un impôt sont relevés dans la proportion qui rapporte le coût : le foyer paie cet impôt dans la même proportion de plus.
+    # Un scénario qui rapporte donne, à l'inverse, ce que le foyer gagnerait si la recette lui était rendue par une baisse de cet impôt.
+    # shortcut: assiettes fixes, sans la CSG déductible de l'impôt sur le revenu ; simuler la hausse si une contrepartie change une conclusion.
+    return {
+        "cout": cout,
+        "non_chiffrees": [mesure for mesure, c in couts.items() if not c],
+        "contreparties": {impot: {borne: round(apres[impot] * md / recette) for borne, md in cout.items()} for impot, recette in RECETTES.items()},
+    }
+
+
 def brut_depuis_net(net_mensuel: float, legislation=LOI_ACTUELLE) -> float:
     """Salaire brut mensuel d'un salarié seul, à temps plein, qui touche ce salaire net ; OpenFisca ne calcule que dans l'autre sens."""
     bas, haut = net_mensuel, net_mensuel * 2
@@ -339,5 +360,6 @@ def simuler(persona: Persona, scenario: Scenario) -> dict:
         "apres": apres,
         "ecart_revenu_disponible": apres["revenu_disponible"] - avant["revenu_disponible"],
         "ecart_pouvoir_achat": apres["revenu_disponible"] + apres["tva"] - avant["revenu_disponible"] - avant["tva"],
+        "budget": budget(scenario, apres),
         "versions": VERSIONS,
     }

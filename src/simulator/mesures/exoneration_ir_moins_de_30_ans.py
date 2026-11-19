@@ -1,6 +1,6 @@
 from openfisca_core.model_api import ADD, Variable, min_
 
-from simulator.mesures import Mesure
+from simulator.mesures import Cout, Mesure
 
 AGE_LIMITE = 30
 PLAFOND_EN_SMIC = 4
@@ -49,4 +49,5 @@ MESURE = Mesure(
         "Les effets sur l'expatriation, l'installation et l'activité des jeunes, que la mesure cherche à obtenir, ne sont pas calculés, pas plus "
         "que son financement."
     ),
+    cout=Cout(2, 2, "2 Md€ par an selon la candidate, le 6 octobre 2026 (LCP et note de l'Institut de l'Entreprise, cités dans la traduction)."),
 )

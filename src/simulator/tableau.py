@@ -34,6 +34,7 @@ def ligne(candidat: str, menage: str, r: dict) -> dict:
         "menage": menage,
         "ecart_pouvoir_achat": r["ecart_pouvoir_achat"],
         "ecart_revenu_disponible": r["ecart_revenu_disponible"],
+        "budget": r["budget"],
         "avant": {poste: r["avant"][poste] for poste in POSTES},
         "apres": {poste: r["apres"][poste] for poste in POSTES},
         "retraites": [avant and {"avant": avant, "apres": apres} for avant, apres in zip(r["avant"]["retraites"], r["apres"]["retraites"])],

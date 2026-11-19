@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field
 from simulator import engine
 from simulator.engine import Scenario
 from simulator.menages import MENAGES
-from simulator.mesures import CATALOGUE
+from simulator.mesures import CATALOGUE, Cout
 from simulator.persona import Adulte, Persona
 from simulator.tableau import ligne, programmes
 
@@ -98,6 +98,24 @@ class Montants(BaseModel):
     )
 
 
+class Fourchette(BaseModel):
+    bas: float = Field(description="Selon le chiffrage le plus bas.")
+    haut: float = Field(description="Selon le chiffrage le plus haut.")
+
+
+class Budget(BaseModel):
+    cout: Fourchette = Field(
+        description="Ce que les mesures chiffrées du scénario coûtent chaque année aux finances publiques, en milliards d'euros ; négatif quand "
+        "elles rapportent. Sans financement, c'est ce dont le déficit public se creuse ou se réduit."
+    )
+    non_chiffrees: list[str] = Field(description="Mesures du scénario qu'aucune source ne chiffre encore : leur coût manque au total.")
+    contreparties: dict[str, Fourchette] = Field(
+        description="Pour la TVA, la CSG et l'impôt sur le revenu : ce que le foyer paierait de plus par an, en euros (négatif), si ce coût "
+        "était financé par une hausse proportionnelle de cet impôt seul ; positif, ce qu'il gagnerait si un scénario qui rapporte lui était "
+        "rendu par cet impôt. Ce sont des conventions du simulateur, pas le financement d'un candidat, dont les mesures font partie du scénario."
+    )
+
+
 class Simulation(BaseModel):
     persona: Persona
     scenario: Scenario
@@ -114,6 +132,7 @@ class Resultat(BaseModel):
     apres: Montants = Field(description="Avec le scénario, en euros par an.")
     ecart_revenu_disponible: int
     ecart_pouvoir_achat: int = Field(description="Écart du revenu disponible et de la TVA payée sur la consommation.")
+    budget: Budget | None = Field(description="Coût du scénario et contreparties pour le foyer ; vide si aucune mesure du scénario n'est chiffrée.")
     versions: dict[str, str] = Field(description="Versions du code qui a produit le résultat, pour le rejouer.")
 
 
@@ -126,6 +145,9 @@ class MesureDecrite(BaseModel):
     traduction: str
     a_confirmer: bool = Field(description="Vrai tant que seule une source secondaire porte la mesure.")
     hypotheses: str = Field(description="Les effets que le calcul mécanique laisse de côté.")
+    cout: Cout | None = Field(
+        description="Coût annuel pour les finances publiques, en milliards d'euros, négatif si la mesure rapporte ; vide si non chiffrée."
+    )
 
 
 class MenageDecrit(BaseModel):

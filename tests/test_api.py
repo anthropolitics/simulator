@@ -15,14 +15,14 @@ def faux_resultat(scenario):
     postes["revenu_disponible"] = 1000 + len(scenario.mesures)
     postes["tva"] = -100
     avant = postes | {"retraites": [None]}
-    return {"ecart_pouvoir_achat": 10, "ecart_revenu_disponible": 7, "avant": avant, "apres": avant}
+    return {"ecart_pouvoir_achat": 10, "ecart_revenu_disponible": 7, "budget": None, "avant": avant, "apres": avant}
 
 
 def test_simulation():
     r = client.post("/simulation", json={"persona": {"salaire_brut_mensuel": 3000, "enfants": 1}, "scenario": {"taux_troisieme_tranche_ir": 0.35}})
     assert r.status_code == 200
     body = r.json()
-    assert set(body) == {"annee", "mesures", "avant", "apres", "ecart_revenu_disponible", "ecart_pouvoir_achat", "versions"}
+    assert set(body) == {"annee", "mesures", "avant", "apres", "ecart_revenu_disponible", "ecart_pouvoir_achat", "budget", "versions"}
     assert body["versions"]["openfisca-france"]
 
 
@@ -47,6 +47,7 @@ def test_mesure_inconnue_refusee():
 def test_catalogue_des_mesures():
     r = client.get("/mesures")
     assert r.status_code == 200 and isinstance(r.json(), list)
+    assert {m["id"]: m["cout"] for m in r.json()}["part_fiscale_deuxieme_enfant"]["haut"] == 2.86
 
 
 def test_catalogue_des_menages():

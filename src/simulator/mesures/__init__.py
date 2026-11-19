@@ -6,6 +6,9 @@ variable (reforme.update_variable, reforme.neutralize_variable). Pour créer un 
 ajouter_impot ou ajouter_prestation : le montant entre alors dans le revenu disponible, et plusieurs mesures se cumulent.
 Une mesure sur les retraites donne en plus, ou seulement, retraites(parametres) : les paramètres du moteur de retraite
 (simulator.retraites) qu'elle change, par dataclasses.replace.
+Quand une source chiffre la mesure, cout dit ce qu'elle coûte ou rapporte aux finances publiques : le moteur en tire le budget du
+scénario. Un financement sans effet calculable sur un foyer (économies de dépenses, impôt sur les entreprises) est une mesure comme une
+autre, sans fonction appliquer et au coût négatif.
 """
 
 import importlib
@@ -21,6 +24,18 @@ from simulator.retraites import Parametres
 
 
 @dataclass(frozen=True)
+class Cout:
+    """Ce que la mesure coûte chaque année aux finances publiques, en milliards d'euros ; négatif quand elle rapporte."""
+
+    bas: float  # le chiffrage le plus bas ; égal au plus haut quand une seule source chiffre
+    haut: float
+    source: str  # qui chiffre, et où
+
+    def __post_init__(self):
+        assert self.bas <= self.haut and self.source, "un coût va du chiffrage le plus bas au plus haut et cite sa source"
+
+
+@dataclass(frozen=True)
 class Mesure:
     id: str
     titre: str
@@ -32,6 +47,7 @@ class Mesure:
     retraites: Callable[[Parametres], Parametres] | None = None
     a_confirmer: bool = False  # vrai tant que seule une source secondaire porte la mesure
     hypotheses: str = ""  # les effets que le calcul mécanique laisse de côté (comportements, répercussions)
+    cout: Cout | None = None  # vide tant qu'aucune source ne chiffre la mesure
 
 
 def ajouter_impot(reforme: Reform, variable: type[Variable]) -> None:

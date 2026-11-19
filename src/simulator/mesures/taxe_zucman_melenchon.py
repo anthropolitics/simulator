@@ -1,7 +1,7 @@
 from openfisca_core.model_api import YEAR, Variable, max_, min_
 from openfisca_france.entities import FoyerFiscal
 
-from simulator.mesures import Mesure, ajouter_impot
+from simulator.mesures import Cout, Mesure, ajouter_impot
 
 SEUIL = 100_000_000
 TAUX = 0.02
@@ -59,4 +59,9 @@ MESURE = Mesure(
     traduction=TRADUCTION,
     appliquer=appliquer,
     hypotheses=HYPOTHESES,
+    cout=Cout(
+        -15,
+        -15,
+        "15 Md€ de recettes selon le candidat (« Comment nous allons remettre de l'ordre dans les comptes publics », La France insoumise, 14 octobre 2026, phrase citée) ; aucun chiffrage indépendant n'est repris.",
+    ),
 )

@@ -1,6 +1,6 @@
 from openfisca_core.model_api import Variable, min_
 
-from simulator.mesures import Mesure
+from simulator.mesures import Cout, Mesure
 
 SALAIRE_BRUT_MEDIAN = 2671.81  # salaire brut mensuel qui donne le salaire net médian de la source, 2 115 €, selon engine.brut_depuis_net
 BAISSE = 500 / (12 * SALAIRE_BRUT_MEDIAN)  # 1,56 % du salaire brut : 500 € nets par an au salaire médian
@@ -43,4 +43,5 @@ MESURE = Mesure(
         "salaire brut ni le salaire net. Les droits à retraite attachés aux cotisations ne sont pas simulés. Le financement (réforme de l'assurance "
         "chômage, compte social unique, lutte contre la fraude) et les effets sur l'emploi ne sont pas calculés."
     ),
+    cout=Cout(30, 30, "30 Md€ par an selon le candidat, pour les deux moitiés de la baisse, salariés et entreprises (mesure n° 24 citée)."),
 )
