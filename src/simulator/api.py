@@ -78,7 +78,21 @@ class FinancesPubliques(BaseModel):
         description="Ce versement réparti comme la dépense publique de 2024, par fonction (Insee) : protection sociale hors santé, santé, "
         "enseignement, charge de la dette (ses intérêts)… Une convention : un euro versé finance chaque fonction selon son poids."
     )
-    recu: int = Field(description="Ce que le foyer reçoit par an en argent : pensions de retraite brutes et prestations sociales ; ni l'école, ni les soins.")
+    recu: int = Field(description="Ce que le foyer reçoit par an en argent : pensions de retraite brutes et prestations sociales.")
+    en_nature: dict[str, int] = Field(
+        description="Ce que les administrations publiques dépensent par an pour le foyer sans le lui verser : l'école de ses enfants de 3 à 17 ans "
+        "(dépense publique moyenne par élève) et la santé (dépense publique moyenne par habitant, sans tenir compte de l'âge)."
+    )
+
+
+class Bilan(BaseModel):
+    entrees: dict[str, int] = Field(description="Ce qui entre par an : salaires et retraites nets, prestations sociales.")
+    sorties: dict[str, int] = Field(
+        description="Ce qui sort par an : impôts directs et consommation par usage. Le logement compte le loyer du foyer, l'énergie et les charges ; "
+        "le reste est la dépense moyenne des ménages de son niveau de vie (Insee, Budget de famille). tva_du_scenario : ce que le scénario "
+        "ajoute ou retire au prix des mêmes achats."
+    )
+    solde: int = Field(description="Entrées moins sorties : l'épargne du foyer, remboursements d'emprunt compris ; négatif s'il dépense plus qu'il ne gagne.")
 
 
 class Montants(BaseModel):
@@ -108,6 +122,7 @@ class Montants(BaseModel):
     depense_hors_energie_taux_reduit: int
     depense_hors_energie_taux_particulier: int
     finances_publiques: FinancesPubliques
+    bilan: Bilan
     retraites: list[Retraite | None] = Field(
         description="Pour chaque adulte, dans l'ordre : son départ au taux plein ; vide s'il n'a pas de salaire, touche déjà une retraite ou est né avant 1961."
     )

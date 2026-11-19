@@ -1,7 +1,7 @@
-"""Consommation d'un ménage, imputée selon son niveau de vie à partir de l'enquête Budget de famille de l'Insee.
+"""Consommation d'un ménage, imputée selon son niveau de vie et son type à partir de l'enquête Budget de famille de l'Insee.
 
 OpenFisca ne connaît pas la consommation : la TVA se calcule sur ces dépenses, l'énergie poste par poste, le reste regroupé par
-taux de TVA. Le persona peut les remplacer par les siennes. Elles sont tenues fixes d'un scénario à l'autre (incidence statique).
+taux de TVA, et par usage pour le bilan du foyer. Le persona peut les remplacer par les siennes. Elles sont tenues fixes d'un scénario à l'autre (incidence statique).
 """
 
 from bisect import bisect
@@ -228,13 +228,21 @@ TAUX_DU_POSTE = {
 DECILES_2018 = (11_210, 14_150, 16_680, 18_990, 21_250, 23_750, 26_680, 30_820, 39_130)
 
 
+# Dépense de consommation d'un type de ménage, rapportée à celle de l'ensemble des ménages (27 408 € en 2017), selon le nombre d'adultes
+# et la présence d'enfants : personnes seules, familles monoparentales, couples sans enfant, couples avec enfants (même enquête, tableau
+# TF105 « selon le type de ménage », ligne CTOTALE, https://www.insee.fr/fr/statistiques/fichier/4648335/TF105.csv). Le tableau par
+# décile donne la dépense du ménage moyen, de plus de deux personnes : sans ce rapport, une personne seule dépenserait autant qu'une famille.
+# shortcut: le même rapport pour tous les postes et tous les déciles ; les croiser demande les données détaillées de l'enquête.
+PART_DU_TYPE = {(1, False): 17_314 / 27_408, (1, True): 23_908 / 27_408, (2, False): 30_756 / 27_408, (2, True): 38_453 / 27_408}
+
+
 def decile(niveau_de_vie_2025: float) -> int:
     """Décile de niveau de vie, de 1 à 10, d'un niveau de vie annuel exprimé en euros de 2025."""
     return bisect(DECILES_2018, niveau_de_vie_2025 * IPC["ensemble"]["2018"] / IPC["ensemble"]["2025"]) + 1
 
 
-def depenses_imputees(niveau_de_vie_2025: float) -> dict[str, float]:
-    """Dépenses annuelles de consommation par poste, en euros de 2025, d'un ménage moyen du décile de ce niveau de vie."""
+def depenses_imputees(niveau_de_vie_2025: float, part: float = 1) -> dict[str, float]:
+    """Dépenses annuelles de consommation par poste, en euros de 2025, d'un ménage moyen du décile de ce niveau de vie, ou de cette part de lui."""
     i = decile(niveau_de_vie_2025) - 1
     en_2017 = {poste: valeurs[i] for poste, valeurs in DEPENSES_2017.items()}
     # Électricité et gaz non séparables vont avec l'électricité, au même taux de TVA. Le reste de la dépense d'énergie du logement :
@@ -243,4 +251,32 @@ def depenses_imputees(niveau_de_vie_2025: float) -> dict[str, float]:
     en_2017["autres_energies_logement"] = en_2017.pop("energie_logement") - en_2017["electricite"] - en_2017["gaz"] - en_2017["fioul"]
     en_2017 |= {poste: sum(valeurs[i] for taux, valeurs in CODES_2017.values() if taux == poste) for poste in HORS_ENERGIE}
     # shortcut: l'électricité et le gaz suivent l'indice de l'énergie, qui mêle produits pétroliers ; passer aux indices par produit si l'écart compte.
-    return {poste: round(montant * IPC[INDICE_DU_POSTE[poste]]["2025"] / IPC[INDICE_DU_POSTE[poste]]["2017"]) for poste, montant in en_2017.items()}
+    return {poste: round(part * montant * IPC[INDICE_DU_POSTE[poste]]["2025"] / IPC[INDICE_DU_POSTE[poste]]["2017"]) for poste, montant in en_2017.items()}
+
+
+# Les usages du bilan d'un foyer : les divisions de la nomenclature de l'enquête, que portent les deux premiers chiffres de chaque code.
+USAGES = {
+    "01": "alimentation",
+    "02": "alcool_tabac",
+    "03": "habillement",
+    "04": "logement",
+    "05": "equipement_du_logement",
+    "06": "sante",
+    "07": "transports",
+    "08": "communications",
+    "09": "loisirs_culture",
+    "10": "enseignement",
+    "11": "restaurants_hotels",
+    "12": "autres",
+}
+LOYER = "04111"  # loyer de la résidence principale, moyenne des locataires et des propriétaires : le bilan prend celui du foyer
+
+
+def par_usage(niveau_de_vie_2025: float, part: float = 1) -> dict[str, int]:
+    """Consommation annuelle par usage, hors énergie et hors loyer, en euros de 2025, d'un ménage moyen du décile de ce niveau de vie, ou de cette part."""
+    i = decile(niveau_de_vie_2025) - 1
+    usages = dict.fromkeys(USAGES.values(), 0)
+    for code, (_, valeurs) in CODES_2017.items():
+        if code != LOYER:
+            usages[USAGES[code[:2]]] += valeurs[i]
+    return {usage: round(part * montant * IPC["ensemble"]["2025"] / IPC["ensemble"]["2017"]) for usage, montant in usages.items()}

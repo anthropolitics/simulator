@@ -18,7 +18,7 @@ Le moteur prend un **persona** et un **scénario**, et renvoie ce que le scénar
 
 - **Persona** : un ménage type (composition, revenus, logement, territoire), calé sur les statistiques publiques de l'INSEE.
 - **Scénario** : les mesures d'un programme, celles qui le financent comprises, traduites en paramètres documentés et sourcés.
-- **Résultat** : un fichier JSON versionné, par exemple le revenu disponible annuel avant et après, détaillé en impôts, cotisations et prestations, et pour chaque salarié son âge de départ à la retraite au taux plein, sa pension et leur cumul sur l'espérance de vie. S'y ajoutent ce que le foyer verse aux administrations publiques, réparti par poste de dépense (charge de la dette comprise), ce qu'il en reçoit, et le budget du scénario : ce qu'il coûte ou rapporte aux finances publiques, et ce que le financer coûterait au foyer.
+- **Résultat** : un fichier JSON versionné, par exemple le revenu disponible annuel avant et après, détaillé en impôts, cotisations et prestations, et pour chaque salarié son âge de départ à la retraite au taux plein, sa pension et leur cumul sur l'espérance de vie. S'y ajoutent le bilan du foyer (entrées, sorties par usage, épargne), ce que le foyer verse aux administrations publiques, réparti par poste de dépense (charge de la dette comprise), ce qu'il en reçoit, et le budget du scénario : ce qu'il coûte ou rapporte aux finances publiques, et ce que le financer coûterait au foyer.
 
 Exemple de lecture : « Sophie, infirmière à Lille, deux enfants. Programme A : + X €/an. Programme B : − Y €/an. Programme C : entre − Z et + W €/an, selon l'effet sur l'emploi. »
 
@@ -45,9 +45,20 @@ Exemple de lecture : « Julien, vendeur à Toulouse. Retraite à 62 ans : il par
 Pour situer ces montants, chaque résultat donne aussi le compte du foyer avec les administrations publiques (État, Sécurité sociale, collectivités), avant et après le scénario.
 
 - **Ce qu'il verse** : ses cotisations salariales, sa CSG, ses impôts directs et sa TVA. Ce total est réparti comme la dépense publique de 2024 (Insee) : sur 1 000 € versés, 415 € vont à la protection sociale (retraites, chômage, famille, solidarité), 156 € à la santé, 89 € à l'enseignement, 36 € aux intérêts de la dette, 32 € à la défense, et ainsi de suite.
-- **Ce qu'il reçoit** : ses pensions de retraite et ses prestations sociales.
+- **Ce qu'il reçoit en argent** : ses pensions de retraite et ses prestations sociales.
+- **Ce qu'il reçoit en nature** : l'école de ses enfants de 3 à 17 ans, à la dépense publique moyenne par élève (DEPP), et la santé, à la dépense publique moyenne par habitant (Insee), la même à tout âge pour l'instant.
 
-C'est une convention de lecture : un euro versé finance chaque fonction selon son poids, quel que soit l'impôt. Les cotisations des employeurs et les taxes que le moteur ne calcule pas (carburants, tabac, taxe foncière) ne sont pas comptées dans ce qu'il verse ; l'école et les soins ne le sont pas dans ce qu'il reçoit.
+C'est une convention de lecture : un euro versé finance chaque fonction selon son poids, quel que soit l'impôt. Les cotisations des employeurs et les taxes que le moteur ne calcule pas (carburants, tabac, taxe foncière) ne sont pas comptées dans ce qu'il verse.
+
+### Le bilan du foyer
+
+Chaque résultat donne enfin le bilan annuel du foyer, avant et après le scénario : ce qui entre, ce qui sort, et le solde, qui est son épargne.
+
+- **Entrées** : salaires et retraites nets, prestations sociales.
+- **Sorties** : impôts directs et consommation par usage (logement, alimentation, transports, santé, loisirs…). Le logement compte le loyer du foyer, son énergie et ses charges ; les carburants vont aux transports. Le reste est la dépense moyenne des ménages de son niveau de vie et de son type (personne seule, famille monoparentale, couple avec ou sans enfants), d'après l'enquête Budget de famille de l'Insee.
+- **Le scénario** garde les mêmes achats : seuls changent les revenus, les impôts et, quand une mesure touche la TVA, le prix de ces achats.
+
+Ces dépenses sont des moyennes, pas celles du foyer : le solde donne un ordre de grandeur. Celui d'un propriétaire comprend ses remboursements d'emprunt, que l'Insee ne compte pas dans la consommation. Celui d'un locataire est sous-estimé : son loyer est le sien, mais ses autres dépenses restent celles de la moyenne, propriétaires compris. Celui des ménages modestes peut être négatif : dans l'enquête, ils dépensent en moyenne plus qu'ils ne gagnent.
 
 Ces trois conventions de financement ne sont le programme d'aucun candidat : elles donnent un ordre de grandeur, à assiettes fixes, et le moteur n'en choisit aucune. Les effets en retour sur l'emploi, les prix ou la croissance, qui changent le coût lui-même, restent des fourchettes sourcées.
 
@@ -124,9 +135,9 @@ Le moteur calcule l'avant/après d'un ménage type pour un scénario : une ou pl
 
 | Fichier | Rôle |
 |---|---|
-| `src/simulator/engine.py` | Le moteur : un persona et un scénario donnent les montants annuels avant et après, détaillés par dispositif, calculés avec OpenFisca-France sur la législation 2025, et le budget du scénario : son coût, les mesures non chiffrées et ce que le financer coûterait au foyer par la TVA, la CSG ou l'impôt sur le revenu, d'après les recettes 2025 de chaque impôt (Insee) ; pour chaque législation, ce que le foyer verse aux administrations publiques, réparti par fonction de dépense (Insee, 2024), et ce qu'il en reçoit |
+| `src/simulator/engine.py` | Le moteur : un persona et un scénario donnent les montants annuels avant et après, détaillés par dispositif, calculés avec OpenFisca-France sur la législation 2025, et le budget du scénario : son coût, les mesures non chiffrées et ce que le financer coûterait au foyer par la TVA, la CSG ou l'impôt sur le revenu, d'après les recettes 2025 de chaque impôt (Insee) ; pour chaque législation, ce que le foyer verse aux administrations publiques, réparti par fonction de dépense (Insee, 2024), ce qu'il en reçoit en argent et en nature (école, santé), et son bilan : entrées, sorties par usage, épargne |
 | `src/simulator/persona.py` | Le ménage type : adultes (âge, salaire, retraite, nationalité, début de carrière…), enfants, loyer et commune, patrimoine, dépenses de consommation |
-| `src/simulator/consommation.py` | Les dépenses de consommation d'un ménage, imputées selon son niveau de vie à partir de l'enquête Budget de famille 2017 de l'Insee et portées aux prix de 2025, quand le persona ne les donne pas : l'énergie poste par poste, le reste regroupé par taux de TVA selon une table qui donne le taux de chaque code de l'enquête. Elles servent aux mesures de TVA, avec une répercussion intégrale des taux sur les prix, et restent fixes d'un scénario à l'autre |
+| `src/simulator/consommation.py` | Les dépenses de consommation d'un ménage, imputées selon son niveau de vie et son type de ménage à partir de l'enquête Budget de famille 2017 de l'Insee et portées aux prix de 2025, quand le persona ne les donne pas : l'énergie poste par poste, le reste regroupé par taux de TVA selon une table qui donne le taux de chaque code de l'enquête, et par usage pour le bilan du foyer. Elles servent aux mesures de TVA, avec une répercussion intégrale des taux sur les prix, et restent fixes d'un scénario à l'autre |
 | `src/simulator/retraites.py` | La retraite de chaque adulte salarié, calculée hors d'OpenFisca par un moteur simplifié (régime général et Agirc-Arrco, carrière au salaire actuel) : âge de départ au taux plein, pension mensuelle brute et cumul sur l'espérance de vie, selon la loi actuelle et selon le scénario |
 | `src/simulator/menages.py` | Les six ménages types, calés sur les statistiques de l'Insee, chaque valeur avec sa source |
 | `src/simulator/tableau.py` | Le tableau publié sur le site : ce que le programme de chaque candidat (ses mesures du catalogue) change pour chaque ménage type |

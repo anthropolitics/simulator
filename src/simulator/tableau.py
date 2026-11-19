@@ -24,8 +24,8 @@ def programmes() -> dict[str, tuple[str, ...]]:
 
 
 # Les postes du revenu que le site décompose, avant et après : l'écart de pouvoir d'achat est celui du revenu disponible et de la TVA.
-# S'y ajoute ce que le foyer verse aux administrations publiques, réparti par fonction de dépense, et ce qu'il en reçoit.
-POSTES = ("salaire_net", "retraite_nette", "impots_directs", "prestations_sociales", "revenu_disponible", "tva", "finances_publiques")
+# S'y ajoutent le bilan du foyer, entrées et sorties, ce qu'il verse aux administrations publiques par fonction de dépense et ce qu'il en reçoit.
+POSTES = ("salaire_net", "retraite_nette", "impots_directs", "prestations_sociales", "revenu_disponible", "tva", "finances_publiques", "bilan")
 
 
 def ligne(candidat: str, menage: str, r: dict) -> dict:

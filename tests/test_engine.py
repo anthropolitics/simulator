@@ -6,7 +6,7 @@ from openfisca_core.model_api import YEAR, Variable
 from openfisca_france.entities import Famille, FoyerFiscal
 
 from simulator import engine
-from simulator.consommation import CODES_2017, DEPENSES_2017, decile, depenses_imputees
+from simulator.consommation import CODES_2017, DEPENSES_2017, LOYER, PART_DU_TYPE, decile, depenses_imputees, par_usage
 from simulator.engine import (
     DEPENSES_PUBLIQUES,
     LOI_ACTUELLE,
@@ -138,8 +138,10 @@ def test_le_decile_de_niveau_de_vie():
 
 def test_une_depense_absente_est_imputee_selon_le_niveau_de_vie():
     m = calculer(LOI_ACTUELLE, Persona(adultes=(Adulte(au_smic=True),), depenses=Depenses(electricite=1800)))
-    imputees = depenses_imputees(m["revenu_disponible"])  # une personne seule compte pour une unité de consommation
+    # Une personne seule compte pour une unité de consommation, et dépense 63 % de ce que dépense le ménage moyen de son décile.
+    imputees = depenses_imputees(m["revenu_disponible"], PART_DU_TYPE[1, False])
     assert m["depense_electricite"] == 1800 and m["depense_carburants"] == imputees["carburants"] > 0
+    assert imputees["carburants"] == pytest.approx(0.632 * depenses_imputees(m["revenu_disponible"])["carburants"], abs=1)
 
 
 def test_imputation_hors_energie_d_un_menage_du_premier_decile():
@@ -302,3 +304,38 @@ def test_un_retraite_recoit_sa_pension_brute_et_verse_ses_prelevements():
     f = m["finances_publiques"]
     assert f["recu"] == 18_000 + m["prestations_sociales"]
     assert f["verse"] == 18_000 - m["retraite_nette"] - m["impots_directs"] - m["tva"]
+
+
+def test_la_consommation_par_usage_reprend_l_enquete_sans_le_loyer():
+    # Premier décile : 14 538 € de consommation hors énergie en 2017, dont 1 840 € de loyer ; le reste est porté aux prix de 2025.
+    usages = par_usage(10_000)
+    assert sum(usages.values()) == pytest.approx((14_538 - CODES_2017[LOYER][1][0]) * 120.95 / 101.22, abs=len(usages))
+    assert usages["alimentation"] == round(2863 * 120.95 / 101.22) and usages["enseignement"] == round(296 * 120.95 / 101.22)
+
+
+def test_le_bilan_met_le_loyer_et_l_energie_au_logement_et_solde_les_entrees_et_les_sorties():
+    locataire = Persona(adultes=(Adulte(),), loyer_mensuel=600, code_commune="69123")
+    m = {"salaire_net": 20_000, "retraite_nette": 0, "prestations_sociales": 1000, "impots_directs": -500, "tva": -2100}
+    m |= {"depense_electricite": 700, "depense_gaz": 300, "depense_fioul": 0, "depense_autres_energies_logement": 100, "depense_carburants": 900}
+    b = engine.bilan(locataire, m, {"logement": 1000, "transports": 2000, "alimentation": 3000}, tva_actuelle=-2000)
+    assert b["entrees"] == {"salaires": 20_000, "retraites": 0, "prestations": 1000}
+    # Les mêmes achats coûtent 100 € de TVA de plus avec le scénario.
+    assert b["sorties"] == {"logement": 1000 + 7200 + 1100, "transports": 2900, "alimentation": 3000, "impots_directs": 500, "tva_du_scenario": 100}
+    assert b["solde"] == 21_000 - 15_800
+
+
+def test_le_foyer_recoit_en_nature_l_ecole_de_ses_enfants_et_la_sante():
+    famille = Persona(adultes=(Adulte(), Adulte()), enfants=(2, 5, 12, 19))
+    m = dict.fromkeys(("salaire_brut", "retraite_brute", "salaire_net", "retraite_nette", "impots_directs", "tva", "prestations_sociales"), 0)
+    en_nature = engine.finances_publiques(m, famille)["en_nature"]
+    # À l'école de 3 à 17 ans : un enfant dans le premier degré, un dans le second ; la santé, pour les six.
+    assert en_nature == {"enseignement": round(0.82 * (9080 + 11_660)), "sante": round(261e9 / 68.6e6 * 6)}
+
+
+def test_la_simulation_porte_le_bilan_avant_et_apres():
+    r = simuler(seul(2500), Scenario(mesures=("tva_sociale",)))
+    avant, apres = r["avant"], r["apres"]
+    assert avant["bilan"]["solde"] == pytest.approx(avant["revenu_disponible"] - sum(avant["bilan"]["sorties"].values()) - avant["impots_directs"], abs=2)
+    assert avant["bilan"]["sorties"]["tva_du_scenario"] == 0 < apres["bilan"]["sorties"]["tva_du_scenario"] == avant["tva"] - apres["tva"]
+    # La hausse de TVA ne change que le prix des achats : le solde baisse d'autant que le pouvoir d'achat.
+    assert apres["bilan"]["solde"] - avant["bilan"]["solde"] == r["ecart_pouvoir_achat"]
