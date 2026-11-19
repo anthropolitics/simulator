@@ -6,7 +6,7 @@ from openfisca_core.model_api import YEAR, Variable
 from openfisca_france.entities import Famille, FoyerFiscal
 
 from simulator import engine
-from simulator.consommation import CODES_2017, DEPENSES_2017, LOYER, PART_DU_TYPE, decile, depenses_imputees, par_usage
+from simulator.consommation import CATEGORIES, CODES_2017, DEPENSES_2017, LOYER, Profil, decile, depenses_imputees, multiplicateurs, par_categorie, par_usage
 from simulator.engine import (
     DEPENSES_PUBLIQUES,
     LOI_ACTUELLE,
@@ -22,6 +22,7 @@ from simulator.engine import (
     retraites,
     simuler,
 )
+from simulator.logement import loyer_au_m2, surface_moyenne
 from simulator.mesures import CATALOGUE, Cout, Mesure, ajouter_impot, ajouter_prestation
 from simulator.persona import ANNEE, Adulte, Depenses, Persona
 
@@ -138,10 +139,10 @@ def test_le_decile_de_niveau_de_vie():
 
 def test_une_depense_absente_est_imputee_selon_le_niveau_de_vie():
     m = calculer(LOI_ACTUELLE, Persona(adultes=(Adulte(au_smic=True),), depenses=Depenses(electricite=1800)))
-    # Une personne seule compte pour une unité de consommation, et dépense 63 % de ce que dépense le ménage moyen de son décile.
-    imputees = depenses_imputees(m["revenu_disponible"], PART_DU_TYPE[1, False])
+    # Une personne seule compte pour une unité de consommation ; propriétaire de 40 ans sans commune connue, elle roule moins que le ménage moyen.
+    imputees = depenses_imputees(m["revenu_disponible"], Profil(adultes=1, enfants=False, age=40, locataire=False, zone=None))
     assert m["depense_electricite"] == 1800 and m["depense_carburants"] == imputees["carburants"] > 0
-    assert imputees["carburants"] == pytest.approx(0.632 * depenses_imputees(m["revenu_disponible"])["carburants"], abs=1)
+    assert imputees["carburants"] < depenses_imputees(m["revenu_disponible"])["carburants"]
 
 
 def test_imputation_hors_energie_d_un_menage_du_premier_decile():
@@ -321,15 +322,18 @@ def test_le_bilan_met_le_loyer_et_l_energie_au_logement_et_solde_les_entrees_et_
     assert b["entrees"] == {"salaires": 20_000, "retraites": 0, "prestations": 1000}
     # Les mêmes achats coûtent 100 € de TVA de plus avec le scénario.
     assert b["sorties"] == {"logement": 1000 + 7200 + 1100, "transports": 2900, "alimentation": 3000, "impots_directs": 500, "tva_du_scenario": 100}
-    assert b["solde"] == 21_000 - 15_800
+    assert b["solde"] == 21_000 - 15_800 and b["loyer"] == 7200
 
 
-def test_le_foyer_recoit_en_nature_l_ecole_de_ses_enfants_et_la_sante():
-    famille = Persona(adultes=(Adulte(), Adulte()), enfants=(2, 5, 12, 19))
+def test_le_foyer_recoit_en_nature_l_ecole_de_ses_enfants_et_la_sante_selon_leur_age():
+    famille = Persona(adultes=(Adulte(age=45), Adulte(age=82)), enfants=(2, 5, 8, 12, 16, 19))
     m = dict.fromkeys(("salaire_brut", "retraite_brute", "salaire_net", "retraite_nette", "impots_directs", "tva", "prestations_sociales"), 0)
     en_nature = engine.finances_publiques(m, famille)["en_nature"]
-    # À l'école de 3 à 17 ans : un enfant dans le premier degré, un dans le second ; la santé, pour les six.
-    assert en_nature == {"enseignement": round(0.82 * (9080 + 11_660)), "sante": round(261e9 / 68.6e6 * 6)}
+    # Pas d'école à 2 ans ; puis maternelle, élémentaire, collège, lycée, enseignement supérieur : la part publique de chaque dépense par élève.
+    assert en_nature["enseignement"] == round(0.82 * (8990 + 9130 + 10_450 + 13_020 + 13_300))
+    # La dépense publique de santé par habitant, pondérée selon l'âge : 41-50 ans, plus de 80 ans, trois enfants de 0 à 10 ans, trois de 11 à 20 ans.
+    assert en_nature["sante"] == round(261e9 / 68.6e6 * (1713 + 7858 + 3 * 925 + 3 * 887) / 2496)
+    assert engine.sante(80) < engine.sante(81) and engine.sante(10) > engine.sante(11)
 
 
 def test_la_simulation_porte_le_bilan_avant_et_apres():
@@ -339,3 +343,57 @@ def test_la_simulation_porte_le_bilan_avant_et_apres():
     assert avant["bilan"]["sorties"]["tva_du_scenario"] == 0 < apres["bilan"]["sorties"]["tva_du_scenario"] == avant["tva"] - apres["tva"]
     # La hausse de TVA ne change que le prix des achats : le solde baisse d'autant que le pouvoir d'achat.
     assert apres["bilan"]["solde"] - avant["bilan"]["solde"] == r["ecart_pouvoir_achat"]
+
+
+def test_le_profil_garde_le_niveau_de_depense_du_type_de_menage_et_du_statut_d_occupation():
+    assert set(multiplicateurs(3, None).values()) == {1.0}
+    # Quatrième décile, donc deuxième quintile : une personne seule dépense hors loyer 15 062 € contre 25 433 € pour l'ensemble (TF105) ;
+    # un locataire 16 724 €, un propriétaire 21 556 €, pour 2 844 et 3 029 milliers de ménages (TF107).
+    niveau = 15_062 / 25_433 * 16_724 / ((2844 * 16_724 + 3029 * 21_556) / (2844 + 3029))
+    moyen, m = par_categorie(3), multiplicateurs(3, Profil(adultes=1, enfants=False, age=40, locataire=True, zone=2))
+    # L'âge et la commune ne déplacent que la répartition : le total ne suit que le type de ménage et le statut.
+    assert sum(moyen[c] * m[c] for c in CATEGORIES) == pytest.approx(niveau * sum(moyen.values()), rel=1e-3)  # aux arrondis des tableaux près
+
+
+def test_le_profil_deplace_les_depenses_comme_l_enquete():
+    def famille(age=40, locataire=False, zone=None):
+        return Profil(adultes=2, enfants=True, age=age, locataire=locataire, zone=zone)
+
+    # À la campagne, on roule plus qu'à Paris ; à 78 ans, on dépense plus pour se chauffer et moins pour s'habiller qu'à 30 ans.
+    assert depenses_imputees(20_000, famille(zone=3))["carburants"] > 2 * depenses_imputees(20_000, famille(zone=1))["carburants"]
+    jeune, age = (depenses_imputees(20_000, famille(age=a)) for a in (30, 78))
+    assert age["electricite"] > jeune["electricite"] and par_usage(20_000, famille(age=78))["habillement"] < par_usage(20_000, famille(age=30))["habillement"]
+    # À niveau de vie égal, un locataire dépense moins hors loyer qu'un propriétaire.
+    assert sum(par_usage(20_000, famille(locataire=True)).values()) < sum(par_usage(20_000, famille()).values())
+
+
+def test_le_loyer_au_metre_carre_suit_la_zone_et_le_secteur():
+    irl = 145.93 / 130.56  # de 2020 à 2025
+    # Parc privé : 10,50 € en 2020, 16,11 € à Paris pour 8,59 € en moyenne en 2013. Une commune inconnue est en zone 2, comme pour OpenFisca.
+    assert loyer_au_m2(1, social=False) == pytest.approx(10.5 * 16.11 / 8.59 * irl)
+    assert loyer_au_m2(None, social=False) == loyer_au_m2(2, social=False) == pytest.approx(10.5 * 8.79 / 8.59 * irl)
+    # Zone 3 : entre les communes rurales et les petites agglomérations, selon leurs ménages locataires.
+    assert 6.5 * 4.98 / 5.51 * irl < loyer_au_m2(3, social=True) < 6.5 * 5.02 / 5.51 * irl
+    assert loyer_au_m2(3, social=False) < loyer_au_m2(2, social=False) < loyer_au_m2(1, social=False)
+
+
+def test_la_surface_moyenne_suit_le_type_de_menage_et_l_age():
+    assert [surface_moyenne(False, 1, 0, age) for age in (64, 65)] == [46.7, 58.8]
+    assert [surface_moyenne(False, 2, enfants, 40) for enfants in (0, 2, 3)] == [67.0, 87.1, 99.8]
+    assert (surface_moyenne(True, 1, 2, 70), surface_moyenne(True, 2, 0, 70)) == (73.7, 71.9)
+
+
+def test_le_loyer_d_un_locataire_est_le_sien_ou_a_defaut_estime():
+    def locataire(**logement):
+        return Persona(adultes=(Adulte(age=42, au_smic=True),), code_commune="31555", **logement)
+
+    assert Persona(adultes=(Adulte(),)).loyer == 0 and locataire(loyer_mensuel=616, locataire=True, surface_logement=30).loyer == 616
+    # Toulouse est en zone 2 : une personne seule de moins de 65 ans y loue 46,7 m² dans le parc privé, à défaut de dire sa surface.
+    assert locataire(locataire=True).zone == 2
+    assert locataire(locataire=True).loyer == round(46.7 * loyer_au_m2(2, social=False))
+    assert locataire(locataire=True, surface_logement=30, logement_social=True).loyer == round(30 * loyer_au_m2(2, social=True))
+    with pytest.raises(ValueError, match="commune"):
+        Persona(adultes=(Adulte(),), locataire=True)
+    # Le loyer estimé ouvre les aides au logement et entre dans le bilan, comme un loyer saisi.
+    r = simuler(locataire(locataire=True), Scenario())["avant"]
+    assert r["aides_logement"] > 0 and r["bilan"]["loyer"] == 12 * locataire(locataire=True).loyer

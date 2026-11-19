@@ -1,5 +1,6 @@
 """Persona + scénario → ce que le scénario change pour le foyer, calculé avec OpenFisca-France."""
 
+from bisect import bisect
 from concurrent.futures import ProcessPoolExecutor
 from concurrent.futures.process import BrokenProcessPool
 from copy import deepcopy
@@ -15,7 +16,7 @@ from openfisca_france import FranceTaxBenefitSystem
 from openfisca_france.entities import Famille, FoyerFiscal, Individu, Menage
 from pydantic import BaseModel, Field, field_validator
 
-from simulator.consommation import ENERGIE, PART_DU_TYPE, POSTES, TAUX_DU_POSTE, depenses_imputees, par_usage
+from simulator.consommation import ENERGIE, POSTES, TAUX_DU_POSTE, Profil, depenses_imputees, par_usage
 from simulator.mesures import CATALOGUE, vers_famille, vers_menage
 from simulator.persona import ANNEE, ANNEES, HEURES_TEMPS_PLEIN, Adulte, Depenses, Persona, salaire_annuel, situation
 from simulator.retraites import PARAMETRES_ACTUELS, Parametres, depart
@@ -273,14 +274,27 @@ def smic_annuel(legislation) -> dict[str, float]:
 SMIC_ACTUEL = smic_annuel(LOI_ACTUELLE)
 
 
-# Ce que les administrations publiques dépensent pour le foyer sans le lui verser. École : dépense moyenne par élève en 2024, premier degré
-# de 3 à 10 ans et second degré de 11 à 17 ans, pour la part que financent l'État (55,2 %), les collectivités (23,0 %) et les autres
-# administrations (3,8 %) (DEPP, reprise par l'Insee, « Dépenses d'éducation », figures 1 et 3, https://www.insee.fr/fr/statistiques/8612572).
+# Ce que les administrations publiques dépensent pour le foyer sans le lui verser. École : dépense moyenne par élève en 2024 selon l'âge de
+# l'enfant, donc son niveau : préélémentaire de 3 à 5 ans, élémentaire de 6 à 10 ans, collège de 11 à 14 ans, lycée général et
+# technologique de 15 à 17 ans (le lycée professionnel coûte 14 700 €), enseignement supérieur de 18 à 25 ans, un enfant à charge de cet
+# âge étant pris pour étudiant ; pour la part que financent l'État (55,2 %), les collectivités (23,0 %) et les autres administrations
+# (3,8 %) (DEPP, reprise par l'Insee, « Dépenses d'éducation », figures 1 et 3, https://www.insee.fr/fr/statistiques/8612572).
 # Santé : la dépense publique de santé de 2024 par habitant, pour 68,6 millions d'habitants (Insee Première n° 2033,
-# https://www.insee.fr/fr/statistiques/8327319). Sources consultées le 19 novembre 2026.
-DEPENSE_PAR_ELEVE = {range(3, 11): 9080, range(11, 18): 11_660}
+# https://www.insee.fr/fr/statistiques/8327319), répartie selon l'âge comme les soins remboursés par l'assurance maladie en 2023 : montant
+# moyen par personne de 0 à 10 ans, puis par tranche de dix ans jusqu'à plus de 80 ans, pour 2 496 € en moyenne (DREES, « Dépenses de santé
+# et restes à charge », https://data.drees.solidarites-sante.gouv.fr/explore/dataset/depenses-de-sante-et-restes-a-charge/).
+# Sources consultées le 19 novembre 2026.
+DEPENSE_PAR_ELEVE = {range(3, 6): 8990, range(6, 11): 9130, range(11, 15): 10_450, range(15, 18): 13_020, range(18, 26): 13_300}
 PART_PUBLIQUE_DE_L_ECOLE = 0.82
 SANTE_PAR_HABITANT = DEPENSES_PUBLIQUES["sante"] * 1e9 / 68.6e6
+REMBOURSE_SELON_L_AGE, REMBOURSE_EN_MOYENNE = (925, 887, 1134, 1477, 1713, 2557, 3822, 5587, 7858), 2496
+
+
+def sante(age: int) -> float:
+    """Dépense publique de santé d'une personne de cet âge, par an."""
+    # shortcut: le profil par âge est celui des soins remboursés ; l'hébergement médico-social, que cette base ne couvre pas, pèserait
+    # davantage sur les plus âgés. Prendre un profil de toute la dépense publique de santé s'il en paraît un.
+    return SANTE_PAR_HABITANT * REMBOURSE_SELON_L_AGE[bisect(range(11, 91, 10), age)] / REMBOURSE_EN_MOYENNE
 
 
 def finances_publiques(m: dict[str, int], persona: Persona) -> dict:
@@ -292,11 +306,10 @@ def finances_publiques(m: dict[str, int], persona: Persona) -> dict:
     # shortcut: un euro versé finance chaque fonction selon son poids dans la dépense de 2024, quel que soit l'impôt ; affecter chaque
     # prélèvement à sa caisse (cotisations vieillesse aux retraites) si le site doit dire où va tel impôt.
     total = sum(DEPENSES_PUBLIQUES.values())
-    # shortcut: la même part publique à tous les niveaux d'école et la même dépense de santé à tout âge ; prendre la part de chaque niveau
-    # et le profil par âge de la DREES quand la projection fera vieillir le foyer.
+    # shortcut: la même part publique à tous les niveaux d'école ; prendre celle de chaque niveau si la DEPP la publie.
     en_nature = {
         "enseignement": round(PART_PUBLIQUE_DE_L_ECOLE * sum(cout for ages, cout in DEPENSE_PAR_ELEVE.items() for age in persona.enfants if age in ages)),
-        "sante": round(SANTE_PAR_HABITANT * (len(persona.adultes) + len(persona.enfants))),
+        "sante": round(sum(sante(age) for age in (*(a.age for a in persona.adultes), *persona.enfants))),
     }
     return {
         "verse": verse,
@@ -312,10 +325,15 @@ def bilan(persona: Persona, m: dict, usages: dict[str, int], tva_actuelle: int) 
     sorties = usages | {"impots_directs": -m["impots_directs"]}
     # Le loyer est celui du foyer, avant les aides au logement, comptées dans les prestations ; un propriétaire n'en paie pas, et ses
     # remboursements d'emprunt, que l'Insee ne compte pas dans la consommation, restent dans le solde.
-    sorties["logement"] += round(persona.loyer_mensuel * 12) + sum(m[f"depense_{poste}"] for poste in ENERGIE if poste != "carburants")
+    sorties["logement"] += round(persona.loyer * 12) + sum(m[f"depense_{poste}"] for poste in ENERGIE if poste != "carburants")
     sorties["transports"] += m["depense_carburants"]
     sorties["tva_du_scenario"] = tva_actuelle - m["tva"]  # les mêmes achats, aux prix du scénario
-    return {"entrees": entrees, "sorties": sorties, "solde": sum(entrees.values()) - sum(sorties.values())}
+    return {"entrees": entrees, "sorties": sorties, "solde": sum(entrees.values()) - sum(sorties.values()), "loyer": round(persona.loyer * 12)}
+
+
+def profil(persona: Persona) -> Profil:
+    """Ce qui distingue le foyer du ménage moyen de son niveau de vie, pour lui imputer une consommation."""
+    return Profil(len(persona.adultes), bool(persona.enfants), max(a.age for a in persona.adultes), persona.loyer > 0, persona.zone)
 
 
 def calculer(legislation, persona: Persona) -> dict[str, int]:
@@ -328,7 +346,7 @@ def calculer(legislation, persona: Persona) -> dict[str, int]:
         foyer["foyers_fiscaux"]["foyer"]["rfr"] = {str(int(ANNEE) - 2): float(premiere.calculate("rfr", ANNEES[0])[0])}
     simulation = SimulationBuilder().build_from_entities(legislation, foyer)
     if manquantes := [poste for poste, montant in persona.depenses if montant is None]:
-        imputees = depenses_imputees(float(simulation.calculate("niveau_de_vie", ANNEE)[0]), PART_DU_TYPE[len(persona.adultes), bool(persona.enfants)])
+        imputees = depenses_imputees(float(simulation.calculate("niveau_de_vie", ANNEE)[0]), profil(persona))
         for poste in manquantes:
             simulation.set_input(f"depense_{poste}", ANNEE, [imputees[poste]])
     return {sortie: round(float(simulation.calculate_add(VARIABLES_SORTIES.get(sortie, sortie), ANNEE).sum())) for sortie in SORTIES}
@@ -423,7 +441,7 @@ def simuler(persona: Persona, scenario: Scenario) -> dict:
     # shortcut: la consommation hors énergie suit le décile de niveau de vie du foyer, même s'il a saisi ses dépenses par taux de TVA ;
     # demander les dépenses par usage si le site les fait saisir.
     unites = 1 + 0.5 * (len(persona.adultes) - 1 + sum(age >= 14 for age in persona.enfants)) + 0.3 * sum(age < 14 for age in persona.enfants)
-    usages = par_usage(avant["revenu_disponible"] / unites, PART_DU_TYPE[len(persona.adultes), bool(persona.enfants)])
+    usages = par_usage(avant["revenu_disponible"] / unites, profil(persona))
     return {
         "annee": int(ANNEE),
         "mesures": list(scenario.mesures),

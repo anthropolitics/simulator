@@ -5,6 +5,9 @@ taux de TVA, et par usage pour le bilan du foyer. Le persona peut les remplacer 
 """
 
 from bisect import bisect
+from collections.abc import Sequence
+from math import prod
+from typing import NamedTuple
 
 # Dépense annuelle moyenne par ménage et par décile de niveau de vie, en euros de 2017 (déciles 1 à 10).
 # Insee, enquête Budget de famille 2017, tableau TF106 « Dépenses annuelles moyennes selon le niveau de vie »,
@@ -228,12 +231,116 @@ TAUX_DU_POSTE = {
 DECILES_2018 = (11_210, 14_150, 16_680, 18_990, 21_250, 23_750, 26_680, 30_820, 39_130)
 
 
-# Dépense de consommation d'un type de ménage, rapportée à celle de l'ensemble des ménages (27 408 € en 2017), selon le nombre d'adultes
-# et la présence d'enfants : personnes seules, familles monoparentales, couples sans enfant, couples avec enfants (même enquête, tableau
-# TF105 « selon le type de ménage », ligne CTOTALE, https://www.insee.fr/fr/statistiques/fichier/4648335/TF105.csv). Le tableau par
-# décile donne la dépense du ménage moyen, de plus de deux personnes : sans ce rapport, une personne seule dépenserait autant qu'une famille.
-# shortcut: le même rapport pour tous les postes et tous les déciles ; les croiser demande les données détaillées de l'enquête.
-PART_DU_TYPE = {(1, False): 17_314 / 27_408, (1, True): 23_908 / 27_408, (2, False): 30_756 / 27_408, (2, True): 38_453 / 27_408}
+# Ce qui distingue un foyer du ménage moyen de son décile : la même enquête publie la dépense selon le type de ménage (tableau TF105),
+# l'âge de la personne de référence (TF102), la catégorie de commune (TF104) et le statut d'occupation du logement croisé avec le
+# quintile de niveau de vie (TF107), https://www.insee.fr/fr/statistiques/fichier/4648335/TF105.csv et de même pour les autres.
+# Dépense annuelle moyenne par ménage, en euros de 2017, dans l'ordre de COLONNES.
+LOYER = "04111"  # loyer de la résidence principale, net des aides au logement
+COLONNES = ("01", "02", "03", "04", LOYER, "045", "05", "06", "07", "07221", "08", "09", "10", "11", "12", "CTOTALE")
+ENSEMBLE = (4410, 788, 1374, 4454, 1975, 1353, 1558, 505, 4482, 1108, 743, 2566, 214, 1972, 4343, 27408)
+# Selon le nombre d'adultes et la présence d'enfants : personnes seules, familles monoparentales, couples sans enfant, couples avec enfants.
+TYPES = {
+    (1, False): (2529, 588, 729, 4190, 2252, 1000, 913, 326, 2149, 580, 517, 1637, 68, 1090, 2578, 17314),
+    (1, True): (3597, 687, 1481, 4717, 2311, 1148, 1058, 446, 3591, 849, 783, 2008, 277, 1785, 3477, 23908),
+    (2, False): (5337, 900, 1334, 4269, 1510, 1597, 2059, 586, 5513, 1279, 733, 2939, 69, 1934, 5083, 30756),
+    (2, True): (6161, 956, 2213, 4820, 1889, 1639, 2130, 679, 6839, 1679, 1015, 3629, 509, 3257, 6245, 38453),
+}
+# Selon l'âge de la personne de référence : moins de 25 ans, puis par tranche de dix ans jusqu'à 75 ans et plus.
+AGES = (
+    (2047, 561, 1208, 5038, 3599, 649, 709, 290, 3134, 789, 713, 1707, 529, 1713, 1930, 19580),
+    (3397, 750, 1813, 5285, 3358, 996, 1489, 467, 5022, 1160, 815, 2762, 76, 2441, 4835, 29151),
+    (4804, 872, 1890, 4814, 2312, 1329, 1624, 562, 5257, 1346, 847, 3126, 238, 2884, 5039, 31958),
+    (5067, 977, 1726, 4686, 1953, 1461, 1649, 592, 5716, 1381, 898, 3002, 537, 2617, 4401, 31869),
+    (4865, 930, 1291, 4143, 1450, 1497, 1678, 514, 4759, 1220, 721, 2522, 184, 1722, 4254, 27585),
+    (4664, 663, 857, 3841, 1189, 1479, 1705, 452, 3957, 932, 613, 2442, 28, 1159, 4151, 24531),
+    (3903, 474, 483, 3701, 1173, 1495, 1366, 463, 1827, 510, 499, 1497, 17, 705, 3942, 18878),
+)
+# Selon la commune : rurale, petite ville (moins de 20 000 habitants), ville moyenne, grande ville (plus de 100 000), agglomération de
+# Paris ; et le nombre de ménages de chacune, en milliers (tableau de cadrage de l'enquête, cad01_fe.xlsx, même page).
+COMMUNES = (
+    (4634, 847, 1289, 3333, 853, 1714, 1662, 471, 5132, 1562, 764, 2519, 132, 1690, 4578, 27051),
+    (4453, 763, 1311, 3870, 1479, 1543, 1647, 477, 4663, 1264, 735, 2484, 130, 1624, 4425, 26582),
+    (4132, 707, 1274, 4288, 1936, 1311, 1332, 476, 4295, 1107, 710, 2227, 185, 1674, 4126, 25426),
+    (4223, 791, 1400, 4668, 2357, 1122, 1482, 488, 4097, 941, 733, 2514, 251, 1980, 4197, 26825),
+    (4687, 803, 1594, 6338, 3303, 1159, 1673, 643, 4351, 663, 774, 3125, 368, 2991, 4425, 31772),
+)
+MENAGES_DES_COMMUNES = (6167, 5225, 4057, 9351, 4588)
+# Selon le statut d'occupation, pour chaque quintile de niveau de vie, du premier au cinquième ; et le nombre de ménages, en milliers.
+PROPRIETAIRES = (
+    (3648, 620, 878, 2083, 9, 1355, 926, 342, 3120, 977, 655, 1477, 323, 1036, 3250, 18361),
+    (4404, 752, 957, 2296, 9, 1504, 1219, 493, 3529, 1107, 678, 1850, 136, 1241, 4011, 21565),
+    (4743, 778, 1154, 2598, 11, 1558, 1404, 517, 4583, 1274, 715, 2388, 152, 1694, 4582, 25308),
+    (5265, 815, 1551, 2934, 16, 1647, 2038, 621, 5816, 1407, 793, 3029, 200, 2164, 5694, 30920),
+    (6420, 948, 2153, 3543, 22, 1904, 3423, 760, 7634, 1518, 877, 4903, 385, 3902, 7109, 42058),
+)
+LOCATAIRES = (
+    (2850, 566, 990, 4841, 3000, 858, 537, 256, 1882, 514, 650, 1104, 226, 810, 1829, 16542),
+    (3197, 717, 1108, 6393, 4401, 952, 779, 308, 2651, 756, 678, 1393, 126, 1128, 2647, 21125),
+    (3373, 960, 1231, 7623, 5648, 917, 910, 423, 3461, 1040, 741, 1886, 101, 1566, 3365, 25639),
+    (3820, 813, 1453, 8535, 6473, 912, 1225, 562, 4226, 1067, 776, 2965, 132, 2127, 4048, 30681),
+    (4304, 990, 2300, 11590, 9222, 1019, 1667, 693, 6590, 1017, 854, 4082, 264, 4250, 4789, 42374),
+)
+MENAGES_PROPRIETAIRES, MENAGES_LOCATAIRES = (2182, 3029, 3674, 4201, 4713), (3680, 2844, 2203, 1687, 1177)
+# Les catégories que le profil distingue, hors loyer : les divisions de la nomenclature, l'énergie du logement (045) et les carburants
+# (07221) à part de leur division.
+CATEGORIES = tuple(colonne for colonne in COLONNES if colonne not in (LOYER, "CTOTALE"))
+
+
+class Profil(NamedTuple):
+    """Ce que le simulateur sait d'un foyer pour lui imputer une consommation."""
+
+    adultes: int
+    enfants: bool
+    age: int  # de l'adulte le plus âgé, pris pour personne de référence
+    locataire: bool
+    zone: int | None  # zone des aides au logement de sa commune, si elle est connue
+
+
+def _hors_loyer(ligne: Sequence[float]) -> list[float]:
+    """Dépense par catégorie, l'énergie et les carburants retirés de leur division, et le loyer du logement."""
+    depense = dict(zip(COLONNES, ligne))
+    depense["04"] -= depense[LOYER] + depense["045"]
+    depense["07"] -= depense["07221"]
+    return [depense[categorie] for categorie in CATEGORIES]
+
+
+def _moyenne(lignes: Sequence[Sequence[float]], poids: Sequence[float]) -> list[float]:
+    return [sum(p * valeur for p, valeur in zip(poids, colonne)) / sum(poids) for colonne in zip(*lignes)]
+
+
+def par_categorie(i: int) -> dict[str, float]:
+    """Dépense hors loyer du ménage moyen du décile, par catégorie, en euros de 2017."""
+    depense = dict.fromkeys(CATEGORIES, 0.0) | {"045": DEPENSES_2017["energie_logement"][i], "07221": DEPENSES_2017["carburants"][i]}
+    for code, (_, valeurs) in CODES_2017.items():
+        if code != LOYER:
+            depense[code[:2]] += valeurs[i]
+    return depense
+
+
+def multiplicateurs(i: int, profil: Profil | None) -> dict[str, float]:
+    """Ce par quoi multiplier, catégorie par catégorie, la dépense du ménage moyen du décile pour obtenir celle d'un foyer de ce profil."""
+    if profil is None:
+        return dict.fromkeys(CATEGORIES, 1.0)
+    ensemble = _hors_loyer(ENSEMBLE)
+    quintile = _hors_loyer(_moyenne((PROPRIETAIRES[i // 2], LOCATAIRES[i // 2]), (MENAGES_PROPRIETAIRES[i // 2], MENAGES_LOCATAIRES[i // 2])))
+    selon_le_type = _hors_loyer(TYPES[profil.adultes, profil.enfants])
+    selon_le_statut = _hors_loyer((LOCATAIRES if profil.locataire else PROPRIETAIRES)[i // 2])
+    # Chaque dimension est comparée à sa référence : l'ensemble des ménages, ou ceux du même quintile pour le statut d'occupation.
+    dimensions = [(selon_le_type, ensemble), (_hors_loyer(AGES[bisect(range(25, 85, 10), profil.age)]), ensemble), (selon_le_statut, quintile)]
+    if profil.zone:
+        # shortcut: la zone des aides au logement tient lieu de catégorie de commune : zone 1, agglomération de Paris ; zone 2, grandes
+        # villes ; zone 3, la moyenne des communes rurales, petites et moyennes. Prendre l'unité urbaine de la commune si l'écart compte.
+        commune = (_moyenne(COMMUNES[:3], MENAGES_DES_COMMUNES[:3]), COMMUNES[3], COMMUNES[4])[3 - profil.zone]
+        dimensions.append((_hors_loyer(commune), ensemble))
+    # Le niveau de la dépense suit la taille du ménage et son statut d'occupation : à niveau de vie égal, un locataire a moins à dépenser
+    # une fois son loyer payé. Le décile porte déjà l'effet du revenu : l'âge et la commune ne déplacent que la répartition des dépenses.
+    niveau = sum(selon_le_type) / sum(ensemble) * sum(selon_le_statut) / sum(quintile)
+    # shortcut: les dimensions jouent indépendamment, chacune par le rapport de ses parts de budget à celles de sa référence ; les croiser
+    # demande les données détaillées de l'enquête.
+    structure = [prod(ligne[c] / sum(ligne) * sum(reference) / reference[c] for ligne, reference in dimensions) for c in range(len(CATEGORIES))]
+    moyen = par_categorie(i).values()
+    norme = sum(moyen) / sum(depense * s for depense, s in zip(moyen, structure))  # la répartition ne change pas le total
+    return {categorie: niveau * norme * s for categorie, s in zip(CATEGORIES, structure)}
 
 
 def decile(niveau_de_vie_2025: float) -> int:
@@ -241,17 +348,18 @@ def decile(niveau_de_vie_2025: float) -> int:
     return bisect(DECILES_2018, niveau_de_vie_2025 * IPC["ensemble"]["2018"] / IPC["ensemble"]["2025"]) + 1
 
 
-def depenses_imputees(niveau_de_vie_2025: float, part: float = 1) -> dict[str, float]:
-    """Dépenses annuelles de consommation par poste, en euros de 2025, d'un ménage moyen du décile de ce niveau de vie, ou de cette part de lui."""
+def depenses_imputees(niveau_de_vie_2025: float, profil: Profil | None = None) -> dict[str, float]:
+    """Dépenses annuelles de consommation par poste, en euros de 2025, d'un foyer de ce profil, ou du ménage moyen de son décile de niveau de vie."""
     i = decile(niveau_de_vie_2025) - 1
-    en_2017 = {poste: valeurs[i] for poste, valeurs in DEPENSES_2017.items()}
+    m = multiplicateurs(i, profil)
+    en_2017 = {poste: m["07221" if poste == "carburants" else "045"] * valeurs[i] for poste, valeurs in DEPENSES_2017.items()}
     # Électricité et gaz non séparables vont avec l'électricité, au même taux de TVA. Le reste de la dépense d'énergie du logement :
     # bois, charbon, chaleur des réseaux.
     en_2017["electricite"] += en_2017.pop("electricite_ou_gaz")
     en_2017["autres_energies_logement"] = en_2017.pop("energie_logement") - en_2017["electricite"] - en_2017["gaz"] - en_2017["fioul"]
-    en_2017 |= {poste: sum(valeurs[i] for taux, valeurs in CODES_2017.values() if taux == poste) for poste in HORS_ENERGIE}
+    en_2017 |= {poste: sum(m[code[:2]] * valeurs[i] for code, (taux, valeurs) in CODES_2017.items() if taux == poste) for poste in HORS_ENERGIE}
     # shortcut: l'électricité et le gaz suivent l'indice de l'énergie, qui mêle produits pétroliers ; passer aux indices par produit si l'écart compte.
-    return {poste: round(part * montant * IPC[INDICE_DU_POSTE[poste]]["2025"] / IPC[INDICE_DU_POSTE[poste]]["2017"]) for poste, montant in en_2017.items()}
+    return {poste: round(montant * IPC[INDICE_DU_POSTE[poste]]["2025"] / IPC[INDICE_DU_POSTE[poste]]["2017"]) for poste, montant in en_2017.items()}
 
 
 # Les usages du bilan d'un foyer : les divisions de la nomenclature de l'enquête, que portent les deux premiers chiffres de chaque code.
@@ -269,14 +377,14 @@ USAGES = {
     "11": "restaurants_hotels",
     "12": "autres",
 }
-LOYER = "04111"  # loyer de la résidence principale, moyenne des locataires et des propriétaires : le bilan prend celui du foyer
 
 
-def par_usage(niveau_de_vie_2025: float, part: float = 1) -> dict[str, int]:
-    """Consommation annuelle par usage, hors énergie et hors loyer, en euros de 2025, d'un ménage moyen du décile de ce niveau de vie, ou de cette part."""
+def par_usage(niveau_de_vie_2025: float, profil: Profil | None = None) -> dict[str, int]:
+    """Consommation annuelle par usage, hors énergie et hors loyer, en euros de 2025, d'un foyer de ce profil ou du ménage moyen de son décile."""
     i = decile(niveau_de_vie_2025) - 1
-    usages = dict.fromkeys(USAGES.values(), 0)
+    m = multiplicateurs(i, profil)
+    usages = dict.fromkeys(USAGES.values(), 0.0)
     for code, (_, valeurs) in CODES_2017.items():
-        if code != LOYER:
-            usages[USAGES[code[:2]]] += valeurs[i]
-    return {usage: round(part * montant * IPC["ensemble"]["2025"] / IPC["ensemble"]["2017"]) for usage, montant in usages.items()}
+        if code != LOYER:  # loyer de la résidence principale, moyenne des locataires et des propriétaires : le bilan prend celui du foyer
+            usages[USAGES[code[:2]]] += m[code[:2]] * valeurs[i]
+    return {usage: round(montant * IPC["ensemble"]["2025"] / IPC["ensemble"]["2017"]) for usage, montant in usages.items()}

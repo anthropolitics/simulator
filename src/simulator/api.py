@@ -92,6 +92,7 @@ class Bilan(BaseModel):
         "le reste est la dépense moyenne des ménages de son niveau de vie (Insee, Budget de famille). tva_du_scenario : ce que le scénario "
         "ajoute ou retire au prix des mêmes achats."
     )
+    loyer: int = Field(description="Loyer annuel hors charges compté dans le logement : celui que le foyer a saisi, ou son estimation pour un locataire.")
     solde: int = Field(description="Entrées moins sorties : l'épargne du foyer, remboursements d'emprunt compris ; négatif s'il dépense plus qu'il ne gagne.")
 
 
