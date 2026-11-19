@@ -8,6 +8,7 @@ from openfisca_france.entities import Famille, FoyerFiscal
 from simulator import engine
 from simulator.consommation import CODES_2017, DEPENSES_2017, decile, depenses_imputees
 from simulator.engine import (
+    DEPENSES_PUBLIQUES,
     LOI_ACTUELLE,
     RECETTES,
     SMIC_ACTUEL,
@@ -282,3 +283,22 @@ def test_la_simulation_porte_le_budget_du_scenario():
     assert r["budget"]["cout"] == {"bas": 2.86, "haut": 2.86}
     assert r["budget"]["contreparties"]["tva"]["haut"] == round(r["apres"]["tva"] * 2.86 / RECETTES["tva"]) < 0
     assert simuler(seul(2500), Scenario())["budget"] is None
+
+
+def test_le_foyer_verse_ses_prelevements_repartis_comme_la_depense_publique():
+    m = simuler(seul(2500), Scenario())["avant"]
+    f = m["finances_publiques"]
+    # Un salarié seul : l'écart du brut au net (cotisations, CSG, CRDS), ses impôts directs et sa TVA ; il ne reçoit que ses prestations.
+    assert f["verse"] == pytest.approx(2500 * 12 - m["salaire_net"] - m["impots_directs"] - m["tva"], abs=1) and f["recu"] == m["prestations_sociales"]
+    assert f["verse"] > -(m["csg"] + m["impots_directs"] + m["tva"]) > 0
+    assert set(f["depenses"]) == set(DEPENSES_PUBLIQUES) and sum(f["depenses"].values()) == pytest.approx(f["verse"], abs=len(DEPENSES_PUBLIQUES))
+    assert f["depenses"]["charge_de_la_dette"] == round(f["verse"] * 60 / sum(DEPENSES_PUBLIQUES.values())) > 0
+    # L'Insee compte 1 672 Md€ de dépenses, arrondis de chaque fonction compris.
+    assert sum(DEPENSES_PUBLIQUES.values()) == pytest.approx(1672, abs=2)
+
+
+def test_un_retraite_recoit_sa_pension_brute_et_verse_ses_prelevements():
+    m = calculer(LOI_ACTUELLE, Persona(adultes=(Adulte(age=70, retraite_brute_mensuelle=1500),)))
+    f = m["finances_publiques"]
+    assert f["recu"] == 18_000 + m["prestations_sociales"]
+    assert f["verse"] == pytest.approx(18_000 - m["retraite_nette"] - m["impots_directs"] - m["tva"], abs=1)

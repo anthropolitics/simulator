@@ -44,6 +44,22 @@ VERSIONS = {paquet: version(paquet) for paquet in ("simulator", "openfisca-franc
 # (Insee, comptes nationaux annuels, base 2020, « Impôts — Données annuelles de 1995 à 2025 », données provisoires,
 # https://www.insee.fr/fr/statistiques/2381408, consulté le 19 novembre 2026).
 RECETTES = {"tva": 208.8, "csg": 156.6, "impot_revenu": 103.6}
+# Dépenses des administrations publiques (État, Sécurité sociale, collectivités) en 2024, par fonction, en milliards d'euros. Les intérêts de
+# la dette, que l'Insee compte dans les services généraux (181 Md€), en sont séparés (Insee Première n° 2093, 5 février 2026, figure 2a,
+# données provisoires, https://www.insee.fr/fr/statistiques/8735252, consulté le 19 novembre 2026).
+DEPENSES_PUBLIQUES = {
+    "protection_sociale": 693,  # retraites, chômage, famille, solidarité, aides au logement ; hors santé
+    "sante": 261,
+    "affaires_economiques": 166,
+    "enseignement": 149,
+    "services_generaux": 121,
+    "charge_de_la_dette": 60,
+    "defense": 54,
+    "ordre_et_securite": 52,
+    "loisirs_culture": 43,
+    "logement_equipements_collectifs": 42,
+    "environnement": 30,
+}
 
 
 def _appeler(formule, entite, period, parameters):
@@ -255,7 +271,15 @@ def smic_annuel(legislation) -> dict[str, float]:
 SMIC_ACTUEL = smic_annuel(LOI_ACTUELLE)
 
 
-def calculer(legislation, persona: Persona) -> dict[str, int]:
+def finances_publiques(verse: float, recu: float) -> dict:
+    """Ce que le foyer verse aux administrations publiques, réparti comme elles dépensent, et ce qu'il en reçoit en argent."""
+    # shortcut: un euro versé finance chaque fonction selon son poids dans la dépense de 2024, quel que soit l'impôt ; affecter chaque
+    # prélèvement à sa caisse (cotisations vieillesse aux retraites) si le site doit dire où va tel impôt.
+    total = sum(DEPENSES_PUBLIQUES.values())
+    return {"verse": round(verse), "depenses": {poste: round(verse * md / total) for poste, md in DEPENSES_PUBLIQUES.items()}, "recu": round(recu)}
+
+
+def calculer(legislation, persona: Persona) -> dict:
     foyer = situation(persona, smic_annuel(legislation), SMIC_ACTUEL)
     if any(a.retraite_brute_mensuelle for a in persona.adultes):
         # Le taux de CSG sur une pension dépend du revenu fiscal de N-2 ; le calculer dans la même simulation crée une spirale
@@ -268,7 +292,12 @@ def calculer(legislation, persona: Persona) -> dict[str, int]:
         imputees = depenses_imputees(float(simulation.calculate("niveau_de_vie", ANNEE)[0]))
         for poste in manquantes:
             simulation.set_input(f"depense_{poste}", ANNEE, [imputees[poste]])
-    return {sortie: round(float(simulation.calculate_add(VARIABLES_SORTIES.get(sortie, sortie), ANNEE).sum())) for sortie in SORTIES}
+    montants: dict = {sortie: round(float(simulation.calculate_add(VARIABLES_SORTIES.get(sortie, sortie), ANNEE).sum())) for sortie in SORTIES}
+    salaires, pensions = (float(simulation.calculate_add(variable, ANNEE).sum()) for variable in ("salaire_de_base", "retraite_brute"))
+    # Versé : cotisations salariales, CSG et CRDS (l'écart du brut au net), impôts directs et TVA ; ni les cotisations des employeurs
+    # (voir cout_du_travail), ni les taxes que le moteur ne calcule pas (carburants, tabac, taxe foncière). Reçu : pensions et prestations.
+    verse = salaires + pensions - montants["salaire_net"] - montants["retraite_nette"] - montants["impots_directs"] - montants["tva"]
+    return montants | {"finances_publiques": finances_publiques(verse, pensions + montants["prestations_sociales"])}
 
 
 def parametres_retraite(scenario: Scenario) -> Parametres:

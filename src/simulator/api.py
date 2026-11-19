@@ -69,6 +69,18 @@ class Retraite(BaseModel):
     cumul: int = Field(description="Pensions brutes sur l'espérance de vie à l'âge de départ, sans actualisation.")
 
 
+class FinancesPubliques(BaseModel):
+    verse: int = Field(
+        description="Ce que le foyer verse par an aux administrations publiques : cotisations salariales, CSG, CRDS, impôts directs et TVA ; "
+        "sans les cotisations des employeurs ni les taxes non calculées (carburants, tabac, taxe foncière)."
+    )
+    depenses: dict[str, int] = Field(
+        description="Ce versement réparti comme la dépense publique de 2024, par fonction (Insee) : protection sociale hors santé, santé, "
+        "enseignement, charge de la dette (ses intérêts)… Une convention : un euro versé finance chaque fonction selon son poids."
+    )
+    recu: int = Field(description="Ce que le foyer reçoit par an en argent : pensions de retraite brutes et prestations sociales ; ni l'école, ni les soins.")
+
+
 class Montants(BaseModel):
     salaire_net: int
     retraite_nette: int
@@ -93,6 +105,7 @@ class Montants(BaseModel):
     depense_hors_energie_taux_intermediaire: int
     depense_hors_energie_taux_reduit: int
     depense_hors_energie_taux_particulier: int
+    finances_publiques: FinancesPubliques
     retraites: list[Retraite | None] = Field(
         description="Pour chaque adulte, dans l'ordre : son départ au taux plein ; vide s'il n'a pas de salaire, touche déjà une retraite ou est né avant 1961."
     )
