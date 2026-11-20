@@ -137,8 +137,8 @@ def vieillir(persona: Persona, annees: int, croissance: float, departs: list[dic
     Les salaires montent de la croissance annuelle donnée au-delà des prix ; un salarié qui a atteint l'âge de son départ au taux plein
     (departs, un par adulte) touche sa pension à la place de son salaire ; un enfant quitte le foyer à 21 ans.
     """
-    # shortcut: ni promotion, ni chômage, ni naissance, ni décès, ni déménagement ; le SMIC, les pensions, le loyer et l'emprunt suivent
-    # les prix, donc ne bougent pas. À revoir si le site laisse le visiteur saisir les événements de sa vie.
+    # shortcut: ni promotion, ni chômage, ni naissance, ni décès, ni déménagement ; les pensions, le loyer et l'emprunt suivent les prix,
+    # donc ne bougent pas, et le SMIC est relevé au moment du calcul. À revoir si le site laisse le visiteur saisir les événements de sa vie.
     adultes = []
     for adulte, depart_ in zip(persona.adultes, departs):
         travaille = bool(adulte.salaire_brut_mensuel or adulte.au_smic)

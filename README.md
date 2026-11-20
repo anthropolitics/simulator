@@ -69,8 +69,8 @@ Ces trois conventions de financement ne sont le programme d'aucun candidat : ell
 
 Le moteur peut aussi répondre pour le même foyer dans un an, dans dix ans : le foyer est vieilli, puis simulé comme aujourd'hui. Tout reste en euros d'aujourd'hui.
 
-- **Ce qui bouge** : chacun vieillit ; un enfant quitte le foyer à 21 ans ; les salaires montent plus vite que les prix, au rythme de la productivité du scénario de référence du Conseil d'orientation des retraites (0,7 % par an, 0,4 % et 1,0 % dans ses variantes) ; un salarié qui atteint l'âge de son départ au taux plein touche sa pension à la place de son salaire.
-- **Ce qui ne bouge pas** : la législation, dont les barèmes suivent les prix ; le SMIC, les pensions et le loyer, qui suivent les prix aussi ; l'emploi, la composition du couple, le logement.
+- **Ce qui bouge** : chacun vieillit ; un enfant quitte le foyer à 21 ans ; les salaires montent plus vite que les prix, au rythme de la productivité du scénario de référence du Conseil d'orientation des retraites (0,7 % par an, 0,4 % et 1,0 % dans ses variantes) ; le SMIC gagne la moitié de cette hausse, comme le veut sa règle de revalorisation ; un salarié qui atteint l'âge de son départ au taux plein touche sa pension à la place de son salaire.
+- **Ce qui ne bouge pas** : la législation, dont les barèmes suivent les prix ; les pensions et le loyer, qui suivent les prix aussi ; l'emploi, la composition du couple, le logement.
 - **Ce que cela montre** : un impôt qui pèse plus quand le salaire monte plus vite que le barème, des allocations qui s'éteignent quand les enfants grandissent, et surtout l'effet d'une mesure sur les retraites, qui ne change rien aux revenus d'aujourd'hui mais décide de qui travaille encore à l'horizon.
 
 Ce n'est pas une prévision : ni promotion, ni chômage, ni naissance, ni décès. La fourchette vient des variantes de productivité ; les effets d'une mesure sur l'emploi ou les prix n'y sont pas.

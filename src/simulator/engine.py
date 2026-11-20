@@ -366,13 +366,15 @@ def profil(persona: Persona) -> Profil:
     return Profil(len(persona.adultes), bool(persona.enfants), max(a.age for a in persona.adultes), comme_un_locataire, persona.zone)
 
 
-def calculer(legislation, persona: Persona) -> dict[str, int]:
-    foyer = situation(persona, smic_annuel(legislation), SMIC_ACTUEL)
+def calculer(legislation, persona: Persona, hausse_du_smic: float = 1) -> dict[str, int]:
+    """Montants annuels du foyer selon la législation ; hausse_du_smic relève le SMIC de ceux qui y sont payés, pour une projection."""
+    smic, smic_actuel = ({annee: hausse_du_smic * montant for annee, montant in s.items()} for s in (smic_annuel(legislation), SMIC_ACTUEL))
+    foyer = situation(persona, smic, smic_actuel)
     if any(a.retraite_brute_mensuelle for a in persona.adultes):
         # Le taux de CSG sur une pension dépend du revenu fiscal de N-2 ; le calculer dans la même simulation crée une spirale
         # qu'OpenFisca coupe en annulant la CSG. On le fournit donc en entrée, estimé par une première simulation sur N-1.
         # shortcut: ce revenu de N-1 ignore la CSG déductible de N-1, il est surestimé de 4 à 6 % de la pension ; itérer si un cas limite en dépend.
-        premiere = SimulationBuilder().build_from_entities(legislation, situation(persona, smic_annuel(legislation), SMIC_ACTUEL))
+        premiere = SimulationBuilder().build_from_entities(legislation, situation(persona, smic, smic_actuel))
         foyer["foyers_fiscaux"]["foyer"]["rfr"] = {str(int(ANNEE) - 2): float(premiere.calculate("rfr", ANNEES[0])[0])}
     simulation = SimulationBuilder().build_from_entities(legislation, foyer)
 
@@ -419,7 +421,11 @@ def calculer_selon(scenario: Scenario, persona: Persona, annees: int = 0, croiss
         # Les départs sont calculés avant de vieillir le foyer, sur l'année de naissance réelle de chacun.
         persona = vieillir(persona, annees, croissance, departs)
         departs = [None if adulte.retraite_brute_mensuelle else d for adulte, d in zip(persona.adultes, departs)]
-    montants = calculer(legislation, persona)
+    # Le pouvoir d'achat du SMIC gagne chaque année au moins la moitié de celui des salaires des ouvriers et des employés (Code du travail,
+    # art. L. 3231-8 ; Insee, https://www.insee.fr/fr/metadonnees/definition/c1006) : la moitié de la croissance des salaires projetée.
+    # shortcut: sans coup de pouce, et les seuils que la législation exprime en SMIC restent ceux de 2025 ; relever le paramètre de la
+    # législation si une mesure en dépend à l'horizon.
+    montants = calculer(legislation, persona, (1 + croissance / 2) ** annees)
     return montants | {
         "retraites": departs,
         "finances_publiques": finances_publiques(montants, persona),

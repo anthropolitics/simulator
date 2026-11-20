@@ -468,7 +468,7 @@ def test_le_foyer_vieillit_sans_que_rien_d_autre_ne_lui_arrive():
     # À 63 ans, le second adulte travaille encore ; à 64 ans, il a passé les 63 ans et 6 mois de son départ et touche sa pension.
     assert dans_2_ans.adultes[1].retraite_brute_mensuelle == 0 and dans_2_ans.adultes[1].salaire_brut_mensuel > 2000
     assert (dans_3_ans.adultes[1].salaire_brut_mensuel, dans_3_ans.adultes[1].retraite_brute_mensuelle) == (0, 1400)
-    # Le SMIC suit les prix : un salarié au SMIC y reste, sans salaire saisi à faire monter.
+    # Un salarié au SMIC y reste, sans salaire saisi à faire monter : le SMIC est relevé au moment du calcul.
     smicard = vieillir(Persona(adultes=(Adulte(age=30, au_smic=True, annees_travail_france=2),)), 10, 0.01, [None]).adultes[0]
     assert (smicard.age, smicard.au_smic, smicard.salaire_brut_mensuel, smicard.annees_travail_france) == (40, True, 0, 12)
 
@@ -497,3 +497,14 @@ def test_la_projection_fait_monter_les_salaires_avec_la_productivite():
     r = simuler(seul(2500), Scenario(), annees=10)
     assert r["avant"]["salaire_brut"] == pytest.approx(2500 * 12 * 1.007**10, abs=1) and r["avant"]["foyer"]["adultes"][0]["age"] == 50
     assert simuler(seul(2500), Scenario())["horizon"] == 0 and simuler(seul(2500), Scenario())["croissance"] == 0
+
+
+def test_a_l_horizon_le_smic_gagne_la_moitie_de_la_hausse_des_salaires():
+    smicard = Persona(adultes=(Adulte(age=30, au_smic=True),))
+    aujourd_hui, dans_10_ans = (engine.calculer_selon(Scenario(), smicard, annees, 0.01)["salaire_brut"] for annees in (0, 10))
+    assert aujourd_hui == pytest.approx(SMIC_ACTUEL[ANNEE], abs=1) and dans_10_ans == pytest.approx(aujourd_hui * 1.005**10, abs=1)
+    # Un temps plein au-dessus du SMIC n'y est pas ramené : son salaire monte plus vite que lui.
+    assert engine.calculer_selon(Scenario(), seul(2000), 10, 0.01)["salaire_brut"] == pytest.approx(2000 * 12 * 1.01**10, abs=1)
+    # Un temps partiel reste un temps partiel : le seuil qui le distingue du temps plein monte avec le SMIC.
+    jeune = Persona(adultes=(Adulte(age=25, salaire_brut_mensuel=1700),))  # 55 ans à l'horizon : encore en emploi
+    assert engine.calculer_selon(Scenario(), jeune, 30, 0.01)["salaire_brut"] == pytest.approx(1700 * 12 * 1.01**30, abs=1)
