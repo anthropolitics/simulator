@@ -88,9 +88,10 @@ class FinancesPubliques(BaseModel):
 class Bilan(BaseModel):
     entrees: dict[str, int] = Field(description="Ce qui entre par an : salaires et retraites nets, prestations sociales.")
     sorties: dict[str, int] = Field(
-        description="Ce qui sort par an : impôts directs et consommation par usage. Le logement compte le loyer du foyer, l'énergie et les charges ; "
-        "le reste est la dépense moyenne des ménages de son niveau de vie (Insee, Budget de famille). tva_du_scenario : ce que le scénario "
-        "ajoute ou retire au prix des mêmes achats."
+        description="Ce qui sort par an : impôts directs, taxe foncière et remboursement d'emprunt d'un propriétaire, consommation par usage. Le "
+        "logement compte le loyer du foyer, l'énergie et les charges. La consommation totale suit le revenu du foyer et le taux d'épargne "
+        "des ménages de son niveau de vie ; sa répartition, les ménages de son profil (Insee). tva_du_scenario : ce que le scénario ajoute "
+        "ou retire au prix des mêmes achats."
     )
     loyer: int = Field(description="Loyer annuel hors charges compté dans le logement : celui que le foyer a saisi, ou son estimation pour un locataire.")
     solde: int = Field(description="Entrées moins sorties : l'épargne du foyer, remboursements d'emprunt compris ; négatif s'il dépense plus qu'il ne gagne.")

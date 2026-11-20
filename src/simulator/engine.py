@@ -16,7 +16,8 @@ from openfisca_france import FranceTaxBenefitSystem
 from openfisca_france.entities import Famille, FoyerFiscal, Individu, Menage
 from pydantic import BaseModel, Field, field_validator
 
-from simulator.consommation import ENERGIE, POSTES, TAUX_DU_POSTE, Profil, depenses_imputees, par_usage
+from simulator.consommation import ENERGIE, POSTES, TAUX_DU_POSTE, Profil, depenses_imputees, par_usage, taux_d_epargne
+from simulator.logement import REMBOURSEMENTS, TAXE_FONCIERE, part_des_revenus
 from simulator.mesures import CATALOGUE, vers_famille, vers_menage
 from simulator.persona import ANNEE, ANNEES, HEURES_TEMPS_PLEIN, Adulte, Depenses, Persona, salaire_annuel, situation
 from simulator.retraites import PARAMETRES_ACTUELS, Parametres, depart
@@ -325,21 +326,44 @@ def finances_publiques(m: dict[str, int], persona: Persona) -> dict:
     }
 
 
-def bilan(persona: Persona, m: dict, usages: dict[str, int], tva_actuelle: int) -> dict:
-    """Entrées et sorties annuelles du foyer : revenus nets et prestations, impôts directs et consommation par usage ; le solde est son épargne."""
+def logement(persona: Persona, m: dict) -> dict[str, int]:
+    """Ce que le foyer paie par an pour se loger, hors énergie et charges : un loyer, ou le remboursement d'un emprunt et la taxe foncière."""
+    niveau_de_vie = m["revenu_disponible"] / persona.unites_de_consommation
+    # Les parts de l'enquête Logement s'appliquent aux revenus avant impôts directs et hors aides au logement.
+    revenus = m["revenu_disponible"] - m["impots_directs"] - m["aides_logement"]
+    estime = part_des_revenus(REMBOURSEMENTS, niveau_de_vie) * revenus if persona.accedant else 0
+    # Sans loyer, le foyer est tenu pour propriétaire : il paie la taxe foncière.
+    taxe_fonciere = 0 if persona.loyer else part_des_revenus(TAXE_FONCIERE[persona.rembourse_un_emprunt], niveau_de_vie) * revenus
+    return {
+        "loyer": round(persona.loyer * 12),
+        "remboursement_emprunt": round(persona.remboursement_mensuel * 12 or estime),
+        "taxe_fonciere": round(taxe_fonciere),
+    }
+
+
+def hors_loyer(persona: Persona, m: dict) -> float:
+    """Ce que le foyer consomme par an hors loyer, d'après le taux d'épargne des ménages de son niveau de vie."""
+    charges = logement(persona, m)
+    depense = (1 - taux_d_epargne(m["revenu_disponible"] / persona.unites_de_consommation)) * (m["revenu_disponible"] - charges["taxe_fonciere"])
+    # Le remboursement d'un emprunt tient lieu de loyer. Un loyer plus lourd que la dépense ne laisse rien : le solde devient négatif.
+    return max(depense - charges["loyer"] - charges["remboursement_emprunt"], 0)
+
+
+def bilan(m: dict, usages: dict[str, int], charges: dict[str, int], tva_actuelle: int) -> dict:
+    """Entrées et sorties annuelles du foyer : revenus nets et prestations, impôts, logement et consommation par usage ; le solde est son épargne."""
     entrees = {"salaires": m["salaire_net"], "retraites": m["retraite_nette"], "prestations": m["prestations_sociales"]}
-    sorties = usages | {"impots_directs": -m["impots_directs"]}
-    # Le loyer est celui du foyer, avant les aides au logement, comptées dans les prestations ; un propriétaire n'en paie pas, et ses
-    # remboursements d'emprunt, que l'Insee ne compte pas dans la consommation, restent dans le solde.
-    sorties["logement"] += round(persona.loyer * 12) + sum(m[f"depense_{poste}"] for poste in ENERGIE if poste != "carburants")
+    sorties = usages | {"impots_directs": -m["impots_directs"]} | {poste: charges[poste] for poste in ("taxe_fonciere", "remboursement_emprunt")}
+    # Le loyer est compté avant les aides au logement, qui font partie des prestations.
+    sorties["logement"] += charges["loyer"] + sum(m[f"depense_{poste}"] for poste in ENERGIE if poste != "carburants")
     sorties["transports"] += m["depense_carburants"]
     sorties["tva_du_scenario"] = tva_actuelle - m["tva"]  # les mêmes achats, aux prix du scénario
-    return {"entrees": entrees, "sorties": sorties, "solde": sum(entrees.values()) - sum(sorties.values()), "loyer": round(persona.loyer * 12)}
+    return {"entrees": entrees, "sorties": sorties, "solde": sum(entrees.values()) - sum(sorties.values()), "loyer": charges["loyer"]}
 
 
 def profil(persona: Persona) -> Profil:
-    """Ce qui distingue le foyer du ménage moyen de son niveau de vie, pour lui imputer une consommation."""
-    return Profil(len(persona.adultes), bool(persona.enfants), max(a.age for a in persona.adultes), persona.loyer > 0, persona.zone)
+    """Ce qui distingue le foyer du ménage moyen de son niveau de vie, pour répartir sa consommation."""
+    comme_un_locataire = persona.loyer > 0 or persona.rembourse_un_emprunt
+    return Profil(len(persona.adultes), bool(persona.enfants), max(a.age for a in persona.adultes), comme_un_locataire, persona.zone)
 
 
 def calculer(legislation, persona: Persona) -> dict[str, int]:
@@ -351,11 +375,18 @@ def calculer(legislation, persona: Persona) -> dict[str, int]:
         premiere = SimulationBuilder().build_from_entities(legislation, situation(persona, smic_annuel(legislation), SMIC_ACTUEL))
         foyer["foyers_fiscaux"]["foyer"]["rfr"] = {str(int(ANNEE) - 2): float(premiere.calculate("rfr", ANNEES[0])[0])}
     simulation = SimulationBuilder().build_from_entities(legislation, foyer)
+
+    def annuel(sortie: str) -> int:
+        return round(float(simulation.calculate_add(VARIABLES_SORTIES.get(sortie, sortie), ANNEE).sum()))
+
     if manquantes := [poste for poste, montant in persona.depenses if montant is None]:
-        imputees = depenses_imputees(float(simulation.calculate("niveau_de_vie", ANNEE)[0]), profil(persona))
+        # Les revenus ne dépendent pas des dépenses : ils fixent ce que le foyer consomme, donc ses dépenses manquantes.
+        revenus = {sortie: annuel(sortie) for sortie in ("revenu_disponible", "impots_directs", "aides_logement")}
+        niveau_de_vie = revenus["revenu_disponible"] / persona.unites_de_consommation
+        imputees = depenses_imputees(niveau_de_vie, profil(persona), hors_loyer(persona, revenus))
         for poste in manquantes:
             simulation.set_input(f"depense_{poste}", ANNEE, [imputees[poste]])
-    return {sortie: round(float(simulation.calculate_add(VARIABLES_SORTIES.get(sortie, sortie), ANNEE).sum())) for sortie in SORTIES}
+    return {sortie: annuel(sortie) for sortie in SORTIES}
 
 
 def parametres_retraite(scenario: Scenario) -> Parametres:
@@ -444,15 +475,15 @@ def simuler(persona: Persona, scenario: Scenario) -> dict:
     # Le scénario garde la consommation de la loi actuelle : une mesure ne la change que par les prix (incidence statique).
     depenses = Depenses(**{poste: avant[f"depense_{poste}"] for poste in POSTES})
     apres = avant if scenario.neutre else lancer("scenario", scenario, persona.model_copy(update={"depenses": depenses})).result()
-    # shortcut: la consommation hors énergie suit le décile de niveau de vie du foyer, même s'il a saisi ses dépenses par taux de TVA ;
+    # shortcut: la consommation hors énergie suit le revenu et le profil du foyer, même s'il a saisi ses dépenses par taux de TVA ;
     # demander les dépenses par usage si le site les fait saisir.
-    unites = 1 + 0.5 * (len(persona.adultes) - 1 + sum(age >= 14 for age in persona.enfants)) + 0.3 * sum(age < 14 for age in persona.enfants)
-    usages = par_usage(avant["revenu_disponible"] / unites, profil(persona))
+    usages = par_usage(avant["revenu_disponible"] / persona.unites_de_consommation, profil(persona), hors_loyer(persona, avant))
+    charges = logement(persona, avant)  # tenues fixes d'un scénario à l'autre, comme la consommation
     return {
         "annee": int(ANNEE),
         "mesures": list(scenario.mesures),
-        "avant": avant | {"bilan": bilan(persona, avant, usages, avant["tva"])},
-        "apres": apres | {"bilan": bilan(persona, apres, usages, avant["tva"])},
+        "avant": avant | {"bilan": bilan(avant, usages, charges, avant["tva"])},
+        "apres": apres | {"bilan": bilan(apres, usages, charges, avant["tva"])},
         "ecart_revenu_disponible": apres["revenu_disponible"] - avant["revenu_disponible"],
         "ecart_pouvoir_achat": apres["revenu_disponible"] + apres["tva"] - avant["revenu_disponible"] - avant["tva"],
         "budget": budget(scenario, apres),

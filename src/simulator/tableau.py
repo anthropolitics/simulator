@@ -48,7 +48,7 @@ def persona_publie(menage: Menage) -> dict:
     Sans elle, le formulaire pré-rempli est invalide et le calcul ne part pas ; et la commune fixe la zone des aides au logement,
     donc le foyer saisi ne reproduirait pas le ménage type.
     """
-    return menage.persona.model_dump(mode="json", include={"adultes", "enfants", "loyer_mensuel", "code_commune"})
+    return menage.persona.model_dump(mode="json", include={"adultes", "enfants", "loyer_mensuel", "code_commune", "accedant"})
 
 
 def tableau() -> dict:

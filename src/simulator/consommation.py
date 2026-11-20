@@ -9,6 +9,8 @@ from collections.abc import Sequence
 from math import prod
 from typing import NamedTuple
 
+from numpy import interp
+
 # Dépense annuelle moyenne par ménage et par décile de niveau de vie, en euros de 2017 (déciles 1 à 10).
 # Insee, enquête Budget de famille 2017, tableau TF106 « Dépenses annuelles moyennes selon le niveau de vie »,
 # https://www.insee.fr/fr/statistiques/fichier/4648335/TF106.csv ; codes de la nomenclature de l'enquête entre parenthèses.
@@ -197,7 +199,7 @@ CODES_2017: dict[str, tuple[str | None, tuple[int, ...]]] = {
 # Indices des prix à la consommation, moyennes annuelles, base 100 en 2015 (Insee, Informations rapides n° 8 du 12 janvier 2018
 # pour 2017, et « Prix à la consommation – Moyennes annuelles – Année 2025 » pour 2025).
 IPC = {
-    "ensemble": {"2017": 101.22, "2018": 101.22 * 1.018, "2025": 120.95},  # 2018 : +1,8 % en moyenne (Insee, TEF 2020, fiche 11.4)
+    "ensemble": {"2017": 101.22, "2024": 119.82, "2025": 120.95},  # 2024 : moyenne des douze mois de la série 001759970
     "energie": {"2017": 103.19, "2025": 150.29},
     "produits_petroliers": {"2017": 104.34, "2025": 139.16},
 }
@@ -226,9 +228,29 @@ TAUX_DU_POSTE = {
     PARTICULIER: "taux_particulier_super_reduit",
 }
 
-# Limites supérieures des déciles 1 à 9 de niveau de vie en 2018, en euros de 2018 (Insee, Revenus et patrimoine des ménages,
-# édition 2021, fiche 1.4, figure 1) : l'année la plus proche de l'enquête dont tous les déciles sont publiés.
-DECILES_2018 = (11_210, 14_150, 16_680, 18_990, 21_250, 23_750, 26_680, 30_820, 39_130)
+# Limites supérieures des dixièmes 1 à 9 de niveau de vie en 2024, en euros de 2024 (Insee, « Distribution des niveaux de vie », enquête
+# Revenus fiscaux et sociaux 2024, https://www.insee.fr/fr/statistiques/2416808).
+DECILES_2024 = (13_970, 17_700, 20_980, 23_880, 26_740, 29_880, 33_680, 38_780, 48_580)
+# Taux d'épargne des ménages de chaque cinquième de niveau de vie en 2017, en part de leur revenu disponible (Insee Première n° 1815,
+# « Plus d'épargne chez les plus aisés, plus de dépenses contraintes chez les plus modestes », figure 5,
+# https://www.insee.fr/fr/statistiques/4764600). Sources consultées le 20 novembre 2026.
+TAUX_D_EPARGNE = (0.0271, 0.0499, 0.0965, 0.1123, 0.2837)
+
+
+def en_2024(niveau_de_vie_2025: float) -> float:
+    """Le même niveau de vie aux prix de 2024, l'année des déciles."""
+    # shortcut: le rang de 2024 vaut pour 2025, comme si les niveaux de vie n'avaient suivi que les prix ; prendre les déciles de 2025
+    # quand l'Insee les publie.
+    return niveau_de_vie_2025 * IPC["ensemble"]["2024"] / IPC["ensemble"]["2025"]
+
+
+def taux_d_epargne(niveau_de_vie_2025: float) -> float:
+    """Part du revenu disponible qu'épargnent les ménages de ce niveau de vie."""
+    # Le taux d'un cinquième vaut pour son niveau de vie médian, celui des déciles 1, 3, 5, 7 et 9 ; il est interpolé entre deux et tenu
+    # constant au-delà. C'est le principe du modèle Ines de l'Insee : la consommation suit le revenu du ménage, pas une dépense moyenne.
+    # shortcut: taux de 2017 des comptes nationaux, loyers imputés compris, appliqués au revenu disponible du foyer ; reprendre les
+    # comptes par catégories de ménages en base 2020 quand l'Insee les publie.
+    return float(interp(en_2024(niveau_de_vie_2025), DECILES_2024[::2], TAUX_D_EPARGNE))
 
 
 # Ce qui distingue un foyer du ménage moyen de son décile : la même enquête publie la dépense selon le type de ménage (tableau TF105),
@@ -292,7 +314,7 @@ class Profil(NamedTuple):
     adultes: int
     enfants: bool
     age: int  # de l'adulte le plus âgé, pris pour personne de référence
-    locataire: bool
+    locataire: bool  # ou propriétaire qui rembourse un emprunt, que le modèle Ines de l'Insee range avec les locataires
     zone: int | None  # zone des aides au logement de sa commune, si elle est connue
 
 
@@ -318,48 +340,34 @@ def par_categorie(i: int) -> dict[str, float]:
 
 
 def multiplicateurs(i: int, profil: Profil | None) -> dict[str, float]:
-    """Ce par quoi multiplier, catégorie par catégorie, la dépense du ménage moyen du décile pour obtenir celle d'un foyer de ce profil."""
+    """Ce par quoi multiplier, catégorie par catégorie, la dépense du ménage moyen du décile pour la répartir comme celle d'un foyer de ce profil."""
     if profil is None:
         return dict.fromkeys(CATEGORIES, 1.0)
     ensemble = _hors_loyer(ENSEMBLE)
     quintile = _hors_loyer(_moyenne((PROPRIETAIRES[i // 2], LOCATAIRES[i // 2]), (MENAGES_PROPRIETAIRES[i // 2], MENAGES_LOCATAIRES[i // 2])))
-    selon_le_type = _hors_loyer(TYPES[profil.adultes, profil.enfants])
-    selon_le_statut = _hors_loyer((LOCATAIRES if profil.locataire else PROPRIETAIRES)[i // 2])
     # Chaque dimension est comparée à sa référence : l'ensemble des ménages, ou ceux du même quintile pour le statut d'occupation.
-    dimensions = [(selon_le_type, ensemble), (_hors_loyer(AGES[bisect(range(25, 85, 10), profil.age)]), ensemble), (selon_le_statut, quintile)]
+    dimensions = [
+        (_hors_loyer(TYPES[profil.adultes, profil.enfants]), ensemble),
+        (_hors_loyer(AGES[bisect(range(25, 85, 10), profil.age)]), ensemble),
+        (_hors_loyer((LOCATAIRES if profil.locataire else PROPRIETAIRES)[i // 2]), quintile),
+    ]
     if profil.zone:
         # shortcut: la zone des aides au logement tient lieu de catégorie de commune : zone 1, agglomération de Paris ; zone 2, grandes
         # villes ; zone 3, la moyenne des communes rurales, petites et moyennes. Prendre l'unité urbaine de la commune si l'écart compte.
         commune = (_moyenne(COMMUNES[:3], MENAGES_DES_COMMUNES[:3]), COMMUNES[3], COMMUNES[4])[3 - profil.zone]
         dimensions.append((_hors_loyer(commune), ensemble))
-    # Le niveau de la dépense suit la taille du ménage et son statut d'occupation : à niveau de vie égal, un locataire a moins à dépenser
-    # une fois son loyer payé. Le décile porte déjà l'effet du revenu : l'âge et la commune ne déplacent que la répartition des dépenses.
-    niveau = sum(selon_le_type) / sum(ensemble) * sum(selon_le_statut) / sum(quintile)
+    # Le profil ne déplace que la répartition des dépenses : leur niveau vient du revenu du foyer et du taux d'épargne de son niveau de vie.
     # shortcut: les dimensions jouent indépendamment, chacune par le rapport de ses parts de budget à celles de sa référence ; les croiser
     # demande les données détaillées de l'enquête.
     structure = [prod(ligne[c] / sum(ligne) * sum(reference) / reference[c] for ligne, reference in dimensions) for c in range(len(CATEGORIES))]
     moyen = par_categorie(i).values()
-    norme = sum(moyen) / sum(depense * s for depense, s in zip(moyen, structure))  # la répartition ne change pas le total
-    return {categorie: niveau * norme * s for categorie, s in zip(CATEGORIES, structure)}
+    norme = sum(moyen) / sum(depense * s for depense, s in zip(moyen, structure))
+    return {categorie: norme * s for categorie, s in zip(CATEGORIES, structure)}
 
 
 def decile(niveau_de_vie_2025: float) -> int:
     """Décile de niveau de vie, de 1 à 10, d'un niveau de vie annuel exprimé en euros de 2025."""
-    return bisect(DECILES_2018, niveau_de_vie_2025 * IPC["ensemble"]["2018"] / IPC["ensemble"]["2025"]) + 1
-
-
-def depenses_imputees(niveau_de_vie_2025: float, profil: Profil | None = None) -> dict[str, float]:
-    """Dépenses annuelles de consommation par poste, en euros de 2025, d'un foyer de ce profil, ou du ménage moyen de son décile de niveau de vie."""
-    i = decile(niveau_de_vie_2025) - 1
-    m = multiplicateurs(i, profil)
-    en_2017 = {poste: m["07221" if poste == "carburants" else "045"] * valeurs[i] for poste, valeurs in DEPENSES_2017.items()}
-    # Électricité et gaz non séparables vont avec l'électricité, au même taux de TVA. Le reste de la dépense d'énergie du logement :
-    # bois, charbon, chaleur des réseaux.
-    en_2017["electricite"] += en_2017.pop("electricite_ou_gaz")
-    en_2017["autres_energies_logement"] = en_2017.pop("energie_logement") - en_2017["electricite"] - en_2017["gaz"] - en_2017["fioul"]
-    en_2017 |= {poste: sum(m[code[:2]] * valeurs[i] for code, (taux, valeurs) in CODES_2017.items() if taux == poste) for poste in HORS_ENERGIE}
-    # shortcut: l'électricité et le gaz suivent l'indice de l'énergie, qui mêle produits pétroliers ; passer aux indices par produit si l'écart compte.
-    return {poste: round(montant * IPC[INDICE_DU_POSTE[poste]]["2025"] / IPC[INDICE_DU_POSTE[poste]]["2017"]) for poste, montant in en_2017.items()}
+    return bisect(DECILES_2024, en_2024(niveau_de_vie_2025)) + 1
 
 
 # Les usages du bilan d'un foyer : les divisions de la nomenclature de l'enquête, que portent les deux premiers chiffres de chaque code.
@@ -379,12 +387,40 @@ USAGES = {
 }
 
 
-def par_usage(niveau_de_vie_2025: float, profil: Profil | None = None) -> dict[str, int]:
-    """Consommation annuelle par usage, hors énergie et hors loyer, en euros de 2025, d'un foyer de ce profil ou du ménage moyen de son décile."""
+def _consommation(niveau_de_vie_2025: float, profil: Profil | None, hors_loyer: float | None) -> tuple[dict[str, float], dict[str, float]]:
+    """Dépenses par poste soumis à la TVA, et par usage hors énergie et hors loyer, en euros de 2025.
+
+    Sans autre précision, celles du ménage moyen du décile ; avec un profil, réparties comme celles d'un foyer de ce profil ; avec une
+    dépense hors loyer, ramenées à ce total, énergie comprise.
+    """
     i = decile(niveau_de_vie_2025) - 1
     m = multiplicateurs(i, profil)
+    en_2017 = {poste: m["07221" if poste == "carburants" else "045"] * valeurs[i] for poste, valeurs in DEPENSES_2017.items()}
+    # Électricité et gaz non séparables vont avec l'électricité, au même taux de TVA. Le reste de la dépense d'énergie du logement :
+    # bois, charbon, chaleur des réseaux.
+    en_2017["electricite"] += en_2017.pop("electricite_ou_gaz")
+    en_2017["autres_energies_logement"] = en_2017.pop("energie_logement") - en_2017["electricite"] - en_2017["gaz"] - en_2017["fioul"]
+    # shortcut: l'électricité et le gaz suivent l'indice de l'énergie, qui mêle produits pétroliers ; passer aux indices par produit si l'écart compte.
+    prix = {poste: IPC[indice]["2025"] / IPC[indice]["2017"] for poste, indice in INDICE_DU_POSTE.items()}
+    postes = {poste: montant * prix[poste] for poste, montant in en_2017.items()} | dict.fromkeys(HORS_ENERGIE, 0.0)
     usages = dict.fromkeys(USAGES.values(), 0.0)
-    for code, (_, valeurs) in CODES_2017.items():
+    for code, (taux, valeurs) in CODES_2017.items():
         if code != LOYER:  # loyer de la résidence principale, moyenne des locataires et des propriétaires : le bilan prend celui du foyer
-            usages[USAGES[code[:2]]] += m[code[:2]] * valeurs[i]
-    return {usage: round(montant * IPC["ensemble"]["2025"] / IPC["ensemble"]["2017"]) for usage, montant in usages.items()}
+            montant = m[code[:2]] * valeurs[i] * prix[NORMAL]
+            usages[USAGES[code[:2]]] += montant
+            if taux:
+                postes[taux] += montant
+    if hors_loyer is not None:
+        echelle = hors_loyer / (sum(usages.values()) + sum(postes[poste] for poste in ENERGIE))
+        postes, usages = ({cle: echelle * montant for cle, montant in depenses.items()} for depenses in (postes, usages))
+    return postes, usages
+
+
+def depenses_imputees(niveau_de_vie_2025: float, profil: Profil | None = None, hors_loyer: float | None = None) -> dict[str, float]:
+    """Dépenses annuelles de consommation par poste soumis à la TVA, en euros de 2025."""
+    return {poste: round(montant) for poste, montant in _consommation(niveau_de_vie_2025, profil, hors_loyer)[0].items()}
+
+
+def par_usage(niveau_de_vie_2025: float, profil: Profil | None = None, hors_loyer: float | None = None) -> dict[str, int]:
+    """Consommation annuelle par usage, hors énergie et hors loyer, en euros de 2025."""
+    return {usage: round(montant) for usage, montant in _consommation(niveau_de_vie_2025, profil, hors_loyer)[1].items()}

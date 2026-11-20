@@ -57,6 +57,8 @@ class Persona(BaseModel, frozen=True):
         default=None, gt=0, le=1000, description="Surface du logement loué, en m² ; à défaut, la surface moyenne des locataires du même type de ménage."
     )
     logement_social: bool = Field(default=False, description="Logement du parc social, aux loyers plus bas que ceux du parc privé.")
+    accedant: bool = Field(default=False, description="Propriétaire qui rembourse un emprunt : sans mensualité saisie, elle est estimée d'après ses revenus.")
+    remboursement_mensuel: float = Field(default=0, ge=0, le=50_000, description="Mensualité de l'emprunt du logement d'un propriétaire.")
     code_commune: str | None = Field(default=None, pattern="^[0-9AB]{5}$", description="Code INSEE ; il fixe la zone des aides au logement.")
     patrimoine_financier: float = Field(default=0, ge=0, description="Patrimoine financier net du foyer.")
     patrimoine_immobilier: float = Field(default=0, ge=0, description="Patrimoine immobilier net du foyer, résidence principale comprise.")
@@ -83,6 +85,21 @@ class Persona(BaseModel, frozen=True):
         if (self.loyer_mensuel or self.locataire) and self.code_commune is None:
             raise ValueError("Un loyer demande le code de la commune, qui fixe la zone des aides au logement.")
         return self
+
+    @model_validator(mode="after")
+    def locataire_ou_proprietaire(self):
+        if (self.loyer_mensuel or self.locataire) and (self.accedant or self.remboursement_mensuel):
+            raise ValueError("Un foyer paie un loyer ou rembourse l'emprunt de son logement, pas les deux.")
+        return self
+
+    @property
+    def unites_de_consommation(self) -> float:
+        """Échelle de l'Insee : 1 pour le premier adulte, 0,5 pour toute autre personne de 14 ans ou plus, 0,3 par enfant plus jeune."""
+        return 1 + 0.5 * (len(self.adultes) - 1 + sum(age >= 14 for age in self.enfants)) + 0.3 * sum(age < 14 for age in self.enfants)
+
+    @property
+    def rembourse_un_emprunt(self) -> bool:
+        return self.accedant or self.remboursement_mensuel > 0
 
     @property
     def zone(self) -> int | None:
