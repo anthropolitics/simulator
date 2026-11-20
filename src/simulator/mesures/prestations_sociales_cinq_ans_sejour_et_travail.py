@@ -1,6 +1,6 @@
 from openfisca_france.entities import Famille
 
-from simulator.mesures import Mesure
+from simulator.mesures import Cout, Mesure
 from simulator.mesures.allocations_familiales_reservees_aux_francais import reserver
 
 DUREE = 5  # années de titre de séjour et années travaillées en France, en équivalent temps plein
@@ -38,5 +38,13 @@ MESURE = Mesure(
     hypotheses=(
         "La source prévoit une révision de la Constitution par référendum. Les aides locales et les prestations que ne calcule pas OpenFisca ne sont "
         "pas simulées, pas plus que les effets sur les comportements, dont les départs du territoire et l'activité."
+    ),
+    cout=Cout(
+        -3,
+        -0.6,
+        "Le candidat ne chiffre pas la mesure. Pour la mesure voisine du Rassemblement national, cinq ans de travail en équivalent temps plein : "
+        "économie de 2,6 Md€, de 0,6 à 3, selon l'Institut Montaigne en 2024 "
+        "(https://www.institutmontaigne.org/legislatives-2024/rassemblement-national/reserver-le-benefice-du-rsa-et-des-prestations-de-solidarites-aux-etrangers-ayant-au-moins-5-ans-dequivalent-temps-plein-travaille-en-france). "
+        "Sources consultées le 20 novembre 2026.",
     ),
 )

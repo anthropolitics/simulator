@@ -1,4 +1,4 @@
-from simulator.mesures import Mesure
+from simulator.mesures import Cout, Mesure
 from simulator.mesures.tva_energie_5_5 import taux_reduit
 
 POSTES = ("electricite", "gaz")
@@ -35,5 +35,14 @@ MESURE = Mesure(
     hypotheses=(
         "La baisse de taux est supposée passer entièrement dans le prix payé et les quantités consommées sont tenues fixes ; le financement et "
         "l'effet sur la consommation d'énergie ne sont pas calculés."
+    ),
+    cout=Cout(
+        6.8,
+        7.9,
+        "« Le coût brut de cette disposition [est] estimé à 7,9 milliards d'euros », selon la proposition de loi n° 768 des sénateurs communistes "
+        "de juin 2025 (https://www.senat.fr/leg/ppl24-768.pdf) ; 4,5 Md€ pour l'électricité et 2,3 Md€ pour le gaz selon le ministère de l'Économie "
+        "en juin 2024, rapporté par MoneyVox "
+        "(https://www.moneyvox.fr/votre-argent/actualites/98274/electricite-gaz-carburant-baisser-la-tva-a-5,5-comme-le-promet-le-rn-combien-ca-coute). "
+        "Sources consultées le 20 novembre 2026.",
     ),
 )

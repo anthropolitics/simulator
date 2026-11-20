@@ -1,7 +1,7 @@
 from openfisca_core.model_api import MONTH, Variable, where
 from openfisca_france.entities import Individu
 
-from simulator.mesures import Mesure, ajouter_prestation
+from simulator.mesures import Cout, Mesure, ajouter_prestation
 
 # Montants du livret : par mois pour le jeune, par an pour l'employeur, avant 18 ans puis de 18 à 25 ans.
 JEUNE = (230, 330)
@@ -59,4 +59,11 @@ MESURE = Mesure(
     appliquer=appliquer,
     a_confirmer=True,  # document d'une campagne antérieure, que seule une source de 2026 rattache au programme 2027
     hypotheses="Le nombre d'apprentis, les embauches et les salaires versés par les employeurs sont tenus fixes. Le financement n'est pas calculé.",
+    cout=Cout(
+        4,
+        4,
+        "4 Md€ selon le chiffrage du programme de la candidate en 2022, rapporté par LCP le 13 avril 2022 "
+        "(https://lcp.fr/actualites/presidentielle-des-promesses-quoi-qu-elles-en-coutent-109542) ; aucun chiffrage indépendant de la mesure telle "
+        "qu'elle est décrite. Sources consultées le 20 novembre 2026.",
+    ),
 )

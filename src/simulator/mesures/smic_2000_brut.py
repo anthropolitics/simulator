@@ -1,4 +1,4 @@
-from simulator.mesures import Mesure
+from simulator.mesures import Cout, Mesure
 from simulator.persona import HEURES_TEMPS_PLEIN
 
 SMIC_BRUT_MENSUEL = 2000
@@ -31,5 +31,17 @@ MESURE = Mesure(
     hypotheses=(
         "Les salaires au-dessus du SMIC sont tenus fixes : leur éventuelle revalorisation par diffusion de la hausse (grilles de branche) n'est pas "
         "calculée, pas plus que les effets sur l'emploi, les heures travaillées et les prix."
+    ),
+    cout=Cout(
+        1.6,
+        21,
+        "1,6 Md€ pour un SMIC à 1 600 € net selon le contre-budget 2026 de La France insoumise, qui ne dit pas ce qu'il compte "
+        "(https://lafranceinsoumise.fr/wp-content/uploads/2025/10/Budget-2026_LFI_web_pages.pdf, p. 40) ; de l'ordre de 3,8 Md€ selon la Fondation "
+        "Jean-Jaurès "
+        "(https://www.jean-jaures.org/publication/pour-une-hausse-progressive-du-smic-jusqua-1600-euros-accompagnee-dune-reduction-des-exonerations-sociales/) "
+        "; 19 Md€, de 17 à 21, selon l'Institut Montaigne en 2024 : allègements de cotisations sur les bas salaires et salaires publics, moins les "
+        "prélèvements en plus (https://www.institutmontaigne.org/legislatives-2024/nouveau-front-populaire/augmenter-le-smic-a-1600-e-net). "
+        "Chiffrages de 2024, pour une hausse de 14,4 % du SMIC d'alors ; elle serait moindre depuis celui de 2025. La candidate ne chiffre pas la "
+        "mesure ; 2 000 € brut valaient 1 600 € net en 2024. Sources consultées le 20 novembre 2026.",
     ),
 )

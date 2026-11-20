@@ -4,7 +4,7 @@ from functools import reduce
 from openfisca_core.parameters import Parameter
 from openfisca_core.periods import instant
 
-from simulator.mesures import Mesure
+from simulator.mesures import Cout, Mesure
 from simulator.persona import ANNEE
 
 # Montants revalorisés au 1er avril selon l'inflation (art. L161-25 du code de la sécurité sociale) : base mensuelle des allocations familiales,
@@ -77,5 +77,15 @@ MESURE = Mesure(
         "La revalorisation perdue est celle de 2025 (1,7 % au 1er avril, 1,04 % au 1er octobre pour le logement) ; celle de 2028, qui dépendra de "
         "l'inflation de 2027, n'est pas connue. Les pensions de retraite au-dessus du seuil des « petites retraites » ne sont pas gelées, faute de "
         "seuil et de levier dans le simulateur. Les effets sur la consommation et le recours aux prestations ne sont pas calculés."
+    ),
+    cout=Cout(
+        -4,
+        -1.3,
+        "Économie d'environ 4 Md€ pour le gel des prestations hors petites retraites prévu en 2028, selon l'estimation de France Positive "
+        "(https://france-positive-backend.vercel.app/api/media/file/1ba0bafa-bba6-4f6f-9d36-9178a08235a0-synthese-fp-trajectoires-budgetaires.pdf, "
+        "p. 5), pensions comprises ; 1,3 Md€ pour les seules prestations que gèle le simulateur (minima sociaux, prime d'activité, prestations "
+        "familiales, aides au logement), selon l'Institut des politiques publiques en juin 2025 "
+        "(https://www.ipp.eu/wp-content/uploads/2025/06/chapitre_2_fiscalite_web.pdf). Le candidat ne chiffre pas la mesure. Sources consultées le "
+        "20 novembre 2026.",
     ),
 )

@@ -1,6 +1,6 @@
 from dataclasses import replace
 
-from simulator.mesures import Mesure
+from simulator.mesures import Cout, Mesure
 from simulator.retraites import Parametres
 
 # Âge légal en mois par génération : 3 mois de plus par génération à partir de 1964, jusqu'à 65 ans pour la génération 1972.
@@ -51,5 +51,13 @@ MESURE = Mesure(
         "de 1 000 € par mois, autres régimes convertis à la capitalisation en « environ 8 tranches », cotisations obligatoires placées dans un dispositif "
         "individuel, agence centrale de retraite. Le calcul tient la carrière et le salaire fixes : ni l'emploi des seniors, ni le chômage, l'invalidité "
         "ou les minima sociaux entre l'ancien et le nouvel âge de départ, ni les économies pour les comptes publics ne sont calculés."
+    ),
+    cout=Cout(
+        -17.7,
+        -4.7,
+        "En 2035, selon la Cour des comptes en février 2025 : de 4,7 à 8,4 Md€ d'économie pour le système de retraites et de 9,4 à 17,7 Md€ pour "
+        "l'ensemble des finances publiques, selon que le relèvement à 65 ans commence à la génération 1968 ou 1964 "
+        "(https://www.ccomptes.fr/sites/default/files/2025-03/20250220-Situation-financiere-et-perspectives-du-systeme-de%20retraites.pdf, p. 11 et "
+        "73) ; le calendrier simulé est entre les deux. Le candidat ne chiffre pas la mesure. Sources consultées le 20 novembre 2026.",
     ),
 )

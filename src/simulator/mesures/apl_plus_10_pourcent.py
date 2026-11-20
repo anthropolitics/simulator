@@ -1,7 +1,7 @@
 from numpy import floor
 from openfisca_core.model_api import Variable
 
-from simulator.mesures import Mesure
+from simulator.mesures import Cout, Mesure
 
 HAUSSE = 0.10
 
@@ -37,5 +37,12 @@ MESURE = Mesure(
     hypotheses=(
         "Le loyer est tenu fixe : une hausse des loyers, que la mesure entend empêcher, n'est pas simulée. Le financement, les effets sur le recours "
         "aux aides et sur le marché du logement ne sont pas calculés."
+    ),
+    cout=Cout(
+        1.54,
+        1.54,
+        "1,54 Md€ par an selon l'Institut Montaigne en 2024, soit 10 % des 15,4 Md€ d'aides versées en 2022 "
+        "(https://www.institutmontaigne.org/legislatives-2024/nouveau-front-populaire/revaloriser-les-apl-de-10) ; la candidate ne chiffre pas la "
+        "mesure. Sources consultées le 20 novembre 2026.",
     ),
 )

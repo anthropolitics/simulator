@@ -1,4 +1,4 @@
-from simulator.mesures import Mesure
+from simulator.mesures import Cout, Mesure
 from simulator.persona import ANNEE
 
 # Seuil bas de chaque tranche, en euros par part et par an, et taux marginal.
@@ -58,5 +58,16 @@ MESURE = Mesure(
     hypotheses=(
         "Le calcul ne tient pas compte des changements de comportement (offre de travail, optimisation, départs), ni du calendrier : le "
         "contre-budget prévoit la réforme « au cours du mandat ». La CSG à 14 tranches annoncée avec ce barème fait l'objet d'une mesure distincte."
+    ),
+    cout=Cout(
+        -8,
+        -2,
+        "Avec la CSG progressive : 5,5 Md€ de recettes selon le contre-budget 2026 de La France insoumise "
+        "(https://lafranceinsoumise.fr/wp-content/uploads/2025/10/Budget-2026_LFI_web_pages.pdf, p. 60) ; de 2 à 8 Md€ selon Lucas Chancel, "
+        "Anne-Laure Delatte et Élise Huillery en juin 2024 "
+        "(https://www.lagrandeconversation.com/app/uploads/2024/06/chiffrage-des-recettes-fiscales-du-programme-du-nouveau-front-populaire-la-grande-conversation.pdf). "
+        "Pour le seul impôt sur le revenu, 4,7 Md€ selon l'Institut Montaigne en 2022 "
+        "(https://www.institutmontaigne.org/presidentielle-2022/jean-luc-melenchon/rendre-limpot-sur-le-revenu-plus-progressif-avec-un-bareme-a-14-tranches). "
+        "Sources consultées le 20 novembre 2026.",
     ),
 )

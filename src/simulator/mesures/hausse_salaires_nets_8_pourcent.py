@@ -1,6 +1,6 @@
 from openfisca_core.model_api import Variable, min_
 
-from simulator.mesures import Mesure
+from simulator.mesures import Cout, Mesure
 
 HAUSSE_DU_NET = 0.08
 PLAFOND_EN_SMIC = 3
@@ -41,5 +41,12 @@ MESURE = Mesure(
     hypotheses=(
         "Les droits à retraite attachés aux cotisations ne sont pas simulés. Le financement annoncé (lutte contre les gaspillages et les fraudes) "
         "n'est pas calculé, pas plus que les effets sur l'emploi et les salaires négociés."
+    ),
+    cout=Cout(
+        20,
+        20,
+        "20 Md€ par an au terme de cinq ans de montée en charge, selon le chiffrage du projet de Debout la France de 2022, indépendants compris "
+        "(https://www.debout-la-france.fr/wp-content/uploads/2022/07/Le-chiffrage-du-projet_VFIN.pdf, p. 5) ; aucun chiffrage indépendant. Sources "
+        "consultées le 20 novembre 2026.",
     ),
 )

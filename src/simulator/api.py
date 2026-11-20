@@ -14,7 +14,7 @@ from simulator import engine
 from simulator.engine import Scenario
 from simulator.menages import MENAGES
 from simulator.mesures import CATALOGUE, Cout
-from simulator.persona import Adulte, Persona
+from simulator.persona import CROISSANCE_DE_REFERENCE, Adulte, Persona
 from simulator.tableau import ligne, programmes
 
 
@@ -125,6 +125,7 @@ class Montants(BaseModel):
     depense_hors_energie_taux_particulier: int
     finances_publiques: FinancesPubliques
     bilan: Bilan
+    foyer: Persona = Field(description="Le foyer simulé : celui de la demande, ou ce qu'il est devenu à l'horizon selon cette législation.")
     retraites: list[Retraite | None] = Field(
         description="Pour chaque adulte, dans l'ordre : son départ au taux plein ; vide s'il n'a pas de salaire, touche déjà une retraite ou est né avant 1961."
     )
@@ -151,6 +152,20 @@ class Budget(BaseModel):
 class Simulation(BaseModel):
     persona: Persona
     scenario: Scenario
+    annees: int = Field(
+        default=0,
+        ge=0,
+        le=40,
+        description="Horizon de la projection : le même foyer dans ce nombre d'années, en euros d'aujourd'hui. Chacun vieillit, les enfants "
+        "quittent le foyer à 21 ans, un salarié part en retraite à l'âge que lui donne chaque législation ; rien d'autre ne lui arrive.",
+    )
+    croissance: float = Field(
+        default=CROISSANCE_DE_REFERENCE,
+        ge=0,
+        le=0.02,
+        description="Hausse annuelle des salaires au-delà des prix : 0,007 dans le scénario de référence du Conseil d'orientation des "
+        "retraites, 0,004 et 0,010 dans ses variantes.",
+    )
 
 
 class DemandeProgrammes(BaseModel):
@@ -158,7 +173,9 @@ class DemandeProgrammes(BaseModel):
 
 
 class Resultat(BaseModel):
-    annee: int
+    annee: int = Field(description="Année de la législation et des euros de tous les montants.")
+    horizon: int = Field(description="Nombre d'années dont le foyer a été vieilli ; zéro : aujourd'hui.")
+    croissance: float = Field(description="Hausse annuelle des salaires au-delà des prix retenue pour la projection.")
     mesures: list[str]
     avant: Montants = Field(description="Loi actuelle, en euros par an.")
     apres: Montants = Field(description="Avec le scénario, en euros par an.")
@@ -203,7 +220,7 @@ def mesures() -> list[dict]:
 
 @app.post("/simulation", response_model=Resultat, dependencies=[Depends(limiter)])
 def simulation(demande: Simulation) -> dict:  # FastAPI valide le dict du moteur contre Resultat
-    return engine.simuler(demande.persona, demande.scenario)
+    return engine.simuler(demande.persona, demande.scenario, demande.annees, demande.croissance)
 
 
 @app.post(

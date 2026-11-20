@@ -1,4 +1,4 @@
-from simulator.mesures import Mesure
+from simulator.mesures import Cout, Mesure
 
 SEUIL_PAUVRETE = 1337  # par mois, pour une personne seule, selon le contre-budget de LFI du 14 octobre 2026 (p. 8)
 UC_COUPLE = 1.5  # unités de consommation d'un couple sans enfant, échelle de l'Insee
@@ -40,5 +40,14 @@ MESURE = Mesure(
     hypotheses=(
         "Le recours à l'ASPA est supposé complet ; la récupération de l'allocation sur la succession, le financement et les effets sur la décision "
         "de liquider sa retraite ne sont pas calculés."
+    ),
+    cout=Cout(
+        0.7,
+        1.7,
+        "0,7 Md€ selon l'Institut Montaigne en 2024 "
+        "(https://www.institutmontaigne.org/legislatives-2024/nouveau-front-populaire/abroger-la-reforme-des-retraites-restaurer-la-retraite-a-60-ans-en-prenant-en-compte-le-rsa-en-portant-le-minimum-contributif-au-smic) "
+        "; 1,7 Md€ selon l'amendement n° 1853 au budget de la Sécurité sociale pour 2025, quand le seuil de pauvreté était de 1 216 € "
+        "(https://www.assemblee-nationale.fr/dyn/17/amendements/0325/AN/1853.pdf). Chiffrages faits pour un seuil plus bas que les 1 337 € simulés, "
+        "et pour les seuls bénéficiaires actuels ; le candidat ne chiffre pas la mesure. Sources consultées le 20 novembre 2026.",
     ),
 )

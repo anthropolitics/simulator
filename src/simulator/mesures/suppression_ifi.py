@@ -1,4 +1,4 @@
-from simulator.mesures import Mesure
+from simulator.mesures import Cout, Mesure
 
 MESURE = Mesure(
     id="suppression_ifi",
@@ -20,5 +20,12 @@ MESURE = Mesure(
     hypotheses=(
         "Le calcul suppose un patrimoine déclaré et évalué sans changement de comportement. Une taxe foncière refondue sur les valeurs vénales, qui "
         "pourrait reprendre une part de l'IFI supprimé, n'est pas simulée."
+    ),
+    cout=Cout(
+        2.8,
+        2.8,
+        "L'impôt a rapporté 2,8 Md€ en 2025, après 2,7 Md€ en 2024, selon la note d'exécution budgétaire de la Cour des comptes d'avril 2026 "
+        "(https://www.ccomptes.fr/sites/default/files/2026-04/NEB-2026-Recettes-fiscales.pdf, p. 28) ; le candidat ne chiffre pas la mesure. "
+        "Sources consultées le 20 novembre 2026.",
     ),
 )

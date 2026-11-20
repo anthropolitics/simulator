@@ -1,4 +1,4 @@
-from simulator.mesures import Mesure
+from simulator.mesures import Cout, Mesure
 from simulator.persona import HEURES_TEMPS_PLEIN
 
 # brut_depuis_net(1600) sur la loi 2025 : salaire brut mensuel d'un salarié du privé non cadre, seul, à temps plein, qui touche 1 600 € net.
@@ -40,5 +40,17 @@ MESURE = Mesure(
     hypotheses=(
         "Les salaires au-dessus du SMIC sont tenus fixes : leur éventuelle revalorisation par diffusion de la hausse (grilles de branche) n'est pas "
         "calculée, pas plus que les effets sur l'emploi, les heures travaillées et les prix."
+    ),
+    cout=Cout(
+        1.6,
+        21,
+        "1,6 Md€ pour un SMIC à 1 600 € net selon le contre-budget 2026 de La France insoumise, qui ne dit pas ce qu'il compte "
+        "(https://lafranceinsoumise.fr/wp-content/uploads/2025/10/Budget-2026_LFI_web_pages.pdf, p. 40) ; de l'ordre de 3,8 Md€ selon la Fondation "
+        "Jean-Jaurès "
+        "(https://www.jean-jaures.org/publication/pour-une-hausse-progressive-du-smic-jusqua-1600-euros-accompagnee-dune-reduction-des-exonerations-sociales/) "
+        "; 19 Md€, de 17 à 21, selon l'Institut Montaigne en 2024 : allègements de cotisations sur les bas salaires et salaires publics, moins les "
+        "prélèvements en plus (https://www.institutmontaigne.org/legislatives-2024/nouveau-front-populaire/augmenter-le-smic-a-1600-e-net). "
+        "Chiffrages de 2024, pour une hausse de 14,4 % du SMIC d'alors ; elle serait moindre depuis celui de 2025. Ni Fabien Roussel ni François "
+        "Ruffin ne chiffrent la mesure. Sources consultées le 20 novembre 2026.",
     ),
 )

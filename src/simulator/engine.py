@@ -19,7 +19,7 @@ from pydantic import BaseModel, Field, field_validator
 from simulator.consommation import ENERGIE, POSTES, TAUX_DU_POSTE, Profil, depenses_imputees, par_usage, taux_d_epargne
 from simulator.logement import REMBOURSEMENTS, TAXE_FONCIERE, part_des_revenus
 from simulator.mesures import CATALOGUE, vers_famille, vers_menage
-from simulator.persona import ANNEE, ANNEES, HEURES_TEMPS_PLEIN, Adulte, Depenses, Persona, salaire_annuel, situation
+from simulator.persona import ANNEE, ANNEES, CROISSANCE_DE_REFERENCE, HEURES_TEMPS_PLEIN, Adulte, Depenses, Persona, salaire_annuel, situation, vieillir
 from simulator.retraites import PARAMETRES_ACTUELS, Parametres, depart
 
 # Montants annuels du ménage rendus pour chaque législation. Les impôts sont négatifs : ce que le foyer paie.
@@ -366,13 +366,15 @@ def profil(persona: Persona) -> Profil:
     return Profil(len(persona.adultes), bool(persona.enfants), max(a.age for a in persona.adultes), comme_un_locataire, persona.zone)
 
 
-def calculer(legislation, persona: Persona) -> dict[str, int]:
-    foyer = situation(persona, smic_annuel(legislation), SMIC_ACTUEL)
+def calculer(legislation, persona: Persona, hausse_du_smic: float = 1) -> dict[str, int]:
+    """Montants annuels du foyer selon la législation ; hausse_du_smic relève le SMIC de ceux qui y sont payés, pour une projection."""
+    smic, smic_actuel = ({annee: hausse_du_smic * montant for annee, montant in s.items()} for s in (smic_annuel(legislation), SMIC_ACTUEL))
+    foyer = situation(persona, smic, smic_actuel)
     if any(a.retraite_brute_mensuelle for a in persona.adultes):
         # Le taux de CSG sur une pension dépend du revenu fiscal de N-2 ; le calculer dans la même simulation crée une spirale
         # qu'OpenFisca coupe en annulant la CSG. On le fournit donc en entrée, estimé par une première simulation sur N-1.
         # shortcut: ce revenu de N-1 ignore la CSG déductible de N-1, il est surestimé de 4 à 6 % de la pension ; itérer si un cas limite en dépend.
-        premiere = SimulationBuilder().build_from_entities(legislation, situation(persona, smic_annuel(legislation), SMIC_ACTUEL))
+        premiere = SimulationBuilder().build_from_entities(legislation, situation(persona, smic, smic_actuel))
         foyer["foyers_fiscaux"]["foyer"]["rfr"] = {str(int(ANNEE) - 2): float(premiere.calculate("rfr", ANNEES[0])[0])}
     simulation = SimulationBuilder().build_from_entities(legislation, foyer)
 
@@ -410,12 +412,24 @@ def retraites(persona: Persona, smic: dict[str, float], parametres: Parametres) 
     return departs
 
 
-def calculer_selon(scenario: Scenario, persona: Persona) -> dict:
+def calculer_selon(scenario: Scenario, persona: Persona, annees: int = 0, croissance: float = 0) -> dict:
+    """Montants du foyer selon le scénario, aujourd'hui ou dans quelques années."""
     legislation = loi(scenario)
-    montants = calculer(legislation, persona)
+    departs = retraites(persona, smic_annuel(legislation), parametres_retraite(scenario))
+    if annees:
+        # Chaque adulte part à l'âge que lui donne le scénario : une mesure sur les retraites change qui travaille encore à l'horizon.
+        # Les départs sont calculés avant de vieillir le foyer, sur l'année de naissance réelle de chacun.
+        persona = vieillir(persona, annees, croissance, departs)
+        departs = [None if adulte.retraite_brute_mensuelle else d for adulte, d in zip(persona.adultes, departs)]
+    # Le pouvoir d'achat du SMIC gagne chaque année au moins la moitié de celui des salaires des ouvriers et des employés (Code du travail,
+    # art. L. 3231-8 ; Insee, https://www.insee.fr/fr/metadonnees/definition/c1006) : la moitié de la croissance des salaires projetée.
+    # shortcut: sans coup de pouce, et les seuils que la législation exprime en SMIC restent ceux de 2025 ; relever le paramètre de la
+    # législation si une mesure en dépend à l'horizon.
+    montants = calculer(legislation, persona, (1 + croissance / 2) ** annees)
     return montants | {
-        "retraites": retraites(persona, smic_annuel(legislation), parametres_retraite(scenario)),
+        "retraites": departs,
         "finances_publiques": finances_publiques(montants, persona),
+        "foyer": persona.model_dump(mode="json", exclude={"depenses"}),
     }
 
 
@@ -454,33 +468,36 @@ PROCESSUS: dict[str, ProcessPoolExecutor] = {}
 VERROU = Lock()
 
 
-def lancer(role: str, scenario: Scenario, persona: Persona):
+def lancer(role: str, scenario: Scenario, persona: Persona, annees: int = 0, croissance: float = 0):
     with VERROU:
         try:
-            return PROCESSUS[role].submit(calculer_selon, scenario, persona)
+            return PROCESSUS[role].submit(calculer_selon, scenario, persona, annees, croissance)
         except (KeyError, BrokenProcessPool):  # premier calcul, ou processus tué (par exemple faute de mémoire) : on le relance
             PROCESSUS[role] = ProcessPoolExecutor(max_workers=1, mp_context=get_context("spawn"))
-            return PROCESSUS[role].submit(calculer_selon, scenario, persona)
+            return PROCESSUS[role].submit(calculer_selon, scenario, persona, annees, croissance)
 
 
 @lru_cache(maxsize=1024)
-def actuelle(persona: Persona) -> dict:
-    return lancer("loi actuelle", Scenario(), persona).result()
+def actuelle(persona: Persona, annees: int = 0, croissance: float = 0) -> dict:
+    return lancer("loi actuelle", Scenario(), persona, annees, croissance).result()
 
 
 @lru_cache(maxsize=4096)  # mêmes entrées, même résultat : les valeurs par défaut du site ne se calculent qu'une fois
-def simuler(persona: Persona, scenario: Scenario) -> dict:
-    """Montants annuels du foyer selon la loi actuelle et selon le scénario."""
-    avant = actuelle(persona)
+def simuler(persona: Persona, scenario: Scenario, annees: int = 0, croissance: float = CROISSANCE_DE_REFERENCE) -> dict:
+    """Montants annuels du foyer selon la loi actuelle et selon le scénario, aujourd'hui ou dans quelques années, en euros d'aujourd'hui."""
+    avant = actuelle(persona, annees, croissance)
     # Le scénario garde la consommation de la loi actuelle : une mesure ne la change que par les prix (incidence statique).
     depenses = Depenses(**{poste: avant[f"depense_{poste}"] for poste in POSTES})
-    apres = avant if scenario.neutre else lancer("scenario", scenario, persona.model_copy(update={"depenses": depenses})).result()
+    apres = avant if scenario.neutre else lancer("scenario", scenario, persona.model_copy(update={"depenses": depenses}), annees, croissance).result()
+    persona = Persona.model_validate(avant["foyer"])  # le foyer à l'horizon, selon la loi actuelle
     # shortcut: la consommation hors énergie suit le revenu et le profil du foyer, même s'il a saisi ses dépenses par taux de TVA ;
     # demander les dépenses par usage si le site les fait saisir.
     usages = par_usage(avant["revenu_disponible"] / persona.unites_de_consommation, profil(persona), hors_loyer(persona, avant))
     charges = logement(persona, avant)  # tenues fixes d'un scénario à l'autre, comme la consommation
     return {
         "annee": int(ANNEE),
+        "horizon": annees,
+        "croissance": croissance if annees else 0,
         "mesures": list(scenario.mesures),
         "avant": avant | {"bilan": bilan(avant, usages, charges, avant["tva"])},
         "apres": apres | {"bilan": bilan(apres, usages, charges, avant["tva"])},

@@ -1,7 +1,7 @@
 from openfisca_core.model_api import Variable
 
 from simulator.consommation import ENERGIE
-from simulator.mesures import Mesure
+from simulator.mesures import Cout, Mesure
 
 TAUX = 0.055
 
@@ -39,5 +39,14 @@ MESURE = Mesure(
         "La baisse de taux est supposée passer entièrement dans le prix payé, convention de l'incidence statique ; une répercussion partielle "
         "réduirait le gain. Les quantités consommées sont tenues fixes : la hausse de la consommation que la baisse de prix pourrait entraîner "
         "n'est pas calculée, pas plus que l'effet sur les émissions et le financement de la mesure."
+    ),
+    cout=Cout(
+        9,
+        13.6,
+        "10,96 Md€ selon le contre-budget 2026 du groupe RN, « Baisse TVA énergies », bois compris "
+        "(https://rassemblementnational.fr/documents/GRN-CONTRE-BUDGET-2026.pdf#page=7) ; 11,3 Md€, de 9 à 13,6, selon l'Institut Montaigne en "
+        "2024, sans le bois "
+        "(https://www.institutmontaigne.org/legislatives-2024/rassemblement-national/baisser-la-tva-de-20-a-55-pour-les-carburants-lelectricite-le-gaz-et-le-fioul-domestique). "
+        "Sources consultées le 20 novembre 2026.",
     ),
 )

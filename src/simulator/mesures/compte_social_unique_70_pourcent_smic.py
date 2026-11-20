@@ -1,7 +1,7 @@
 from openfisca_core.model_api import ADD, YEAR, Variable, max_
 from openfisca_france.entities import Famille
 
-from simulator.mesures import Mesure, ajouter_prestation, vers_famille
+from simulator.mesures import Cout, Mesure, ajouter_prestation, vers_famille
 from simulator.mesures.revenu_familial import revenu_familial
 from simulator.mesures.revenu_incitation_activite import revenu_incitation_activite
 
@@ -55,5 +55,12 @@ MESURE = Mesure(
         "Le recensement des aides, dont la source attend l'essentiel des 10 milliards d'euros d'économies avec la lutte contre la fraude, n'a pas "
         "d'effet sur un ménage qui déclare ses revenus exactement. Les aides des collectivités et les tarifs sociaux ne sont pas simulés. Les "
         "effets sur l'emploi et le recours aux aides ne sont pas calculés."
+    ),
+    cout=Cout(
+        -10,
+        -10,
+        "« Un gain annuel estimé à 10 milliards d'euros », selon le candidat, qui vient « d'abord du recensement lui-même [...], ensuite du "
+        "plafonnement » : le chiffre mêle lutte contre la fraude et plafond (page citée en source). Aucun chiffrage indépendant de la mesure telle "
+        "qu'elle est décrite. Sources consultées le 20 novembre 2026.",
     ),
 )

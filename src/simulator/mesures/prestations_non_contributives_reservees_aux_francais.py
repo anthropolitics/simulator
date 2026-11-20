@@ -1,4 +1,4 @@
-from simulator.mesures import Mesure
+from simulator.mesures import Cout, Mesure
 from simulator.mesures.allocations_familiales_reservees_aux_francais import reserver, un_parent_francais
 
 MESURE = Mesure(
@@ -36,5 +36,13 @@ MESURE = Mesure(
         "acquise. Les aides locales et "
         "les prestations que ne calcule pas OpenFisca ne sont pas simulées, pas plus que les effets sur les comportements, dont les départs du "
         "territoire et les naturalisations."
+    ),
+    cout=Cout(
+        -20,
+        -6.7,
+        "Économie de 20 Md€ par an selon Éric Zemmour en 2022, pour les seuls étrangers extra-européens ; 6,7 Md€ selon l'Institut Montaigne, « "
+        "compte tenu du volume d'aides sociales effectivement perçues par des étrangers en France » "
+        "(https://www.institutmontaigne.org/presidentielle-2022/eric-zemmour/retirer-les-aides-sociales-non-contributives-aux-etrangers-extra-europeens). "
+        "Debout la France ne chiffre pas la mesure seule. Sources consultées le 20 novembre 2026.",
     ),
 )

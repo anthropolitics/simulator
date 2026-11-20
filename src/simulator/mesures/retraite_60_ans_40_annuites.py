@@ -1,6 +1,6 @@
 from dataclasses import replace
 
-from simulator.mesures import Mesure
+from simulator.mesures import Cout, Mesure
 from simulator.retraites import Parametres
 
 SMIC_NET_MENSUEL = 1700  # SMIC du programme, même document, p. 9
@@ -50,5 +50,16 @@ MESURE = Mesure(
         "exposé. Le financement, par les recettes nouvelles du document (dont la réduction des exonérations de cotisations sociales, p. 14), et "
         "ses effets sur les salaires et l'emploi ne sont pas calculés. La carrière et le salaire sont tenus fixes : ni l'emploi des seniors, ni "
         "l'effet du départ plus précoce sur les embauches, ni le coût pour les comptes publics ne sont calculés."
+    ),
+    cout=Cout(
+        10.3,
+        67,
+        "« Abrogation de la réforme des retraites, retour à 60 ans et 40 annuités : 10,3 milliards d'euros », montant « appelé à monter en charge "
+        "», selon le contre-budget 2026 de La France insoumise "
+        "(https://lafranceinsoumise.fr/wp-content/uploads/2025/10/Budget-2026_LFI_web_pages.pdf, p. 49) ; 58 Md€, de 49 à 67, selon l'Institut "
+        "Montaigne en 2024, pour le programme de retraites du Nouveau Front populaire "
+        "(https://www.institutmontaigne.org/legislatives-2024/nouveau-front-populaire/abroger-la-reforme-des-retraites-restaurer-la-retraite-a-60-ans-en-prenant-en-compte-le-rsa-en-portant-le-minimum-contributif-au-smic), "
+        "qui compte aussi des trimestres pour les allocataires du RSA et le minimum vieillesse, non simulés ici. Sources consultées le 20 novembre "
+        "2026.",
     ),
 )
