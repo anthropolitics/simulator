@@ -22,7 +22,18 @@ def test_simulation():
     r = client.post("/simulation", json={"persona": {"salaire_brut_mensuel": 3000, "enfants": 1}, "scenario": {"taux_troisieme_tranche_ir": 0.35}})
     assert r.status_code == 200
     body = r.json()
-    assert set(body) == {"annee", "mesures", "avant", "apres", "ecart_revenu_disponible", "ecart_pouvoir_achat", "budget", "versions"}
+    assert set(body) == {"annee", "horizon", "croissance", "mesures", "avant", "apres", "ecart_revenu_disponible", "ecart_pouvoir_achat", "budget", "versions"}
+    assert body["horizon"] == 0 and body["avant"]["foyer"]["adultes"][0]["salaire_brut_mensuel"] == 3000
+
+
+def test_simulation_a_l_horizon():
+    appels.clear()
+    demande = {"persona": {"adultes": [{"age": 30, "salaire_brut_mensuel": 3000}], "enfants": [15]}, "scenario": {}, "annees": 10, "croissance": 0.004}
+    body = client.post("/simulation", json=demande).json()
+    foyer = body["avant"]["foyer"]
+    # Dix ans plus tard : 40 ans, l'enfant de 25 ans est parti, le salaire a monté de 0,4 % par an.
+    assert (body["horizon"], body["croissance"], foyer["adultes"][0]["age"], foyer["enfants"]) == (10, 0.004, 40, [])
+    assert client.post("/simulation", json=demande | {"annees": 41}).status_code == 422
     assert body["versions"]["openfisca-france"]
 
 

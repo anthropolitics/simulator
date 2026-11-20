@@ -123,6 +123,41 @@ class Persona(BaseModel, frozen=True):
         return self
 
 
+# Hausse annuelle des salaires au-delà des prix : les gains de productivité du scénario de référence du Conseil d'orientation des
+# retraites, 0,7 % par an, que ses variantes portent à 0,4 % et 1,0 % (rapport annuel de juin 2026, synthèse,
+# https://www.cor-retraites.fr/sites/default/files/2026-06/Synth%C3%A8se%20RA.pdf, consulté le 20 novembre 2026).
+CROISSANCE_DE_REFERENCE = 0.007
+# Un enfant majeur peut rester rattaché au foyer fiscal de ses parents jusqu'à 21 ans, 25 ans s'il étudie (CGI, art. 6).
+AGE_DE_DEPART_DES_ENFANTS = 21
+
+
+def vieillir(persona: Persona, annees: int, croissance: float, departs: list[dict[str, int] | None]) -> Persona:
+    """Le même foyer dans quelques années, en euros constants : chacun vieillit, rien d'autre ne lui arrive.
+
+    Les salaires montent de la croissance annuelle donnée au-delà des prix ; un salarié qui a atteint l'âge de son départ au taux plein
+    (departs, un par adulte) touche sa pension à la place de son salaire ; un enfant quitte le foyer à 21 ans.
+    """
+    # shortcut: ni promotion, ni chômage, ni naissance, ni décès, ni déménagement ; le SMIC, les pensions, le loyer et l'emprunt suivent
+    # les prix, donc ne bougent pas. À revoir si le site laisse le visiteur saisir les événements de sa vie.
+    adultes = []
+    for adulte, depart_ in zip(persona.adultes, departs):
+        travaille = bool(adulte.salaire_brut_mensuel or adulte.au_smic)
+        evolution: dict = {
+            "age": min(adulte.age + annees, 110),
+            "annees_titre_sejour": min(adulte.annees_titre_sejour + annees, 90),
+            "annees_travail_france": min(adulte.annees_travail_france + annees * travaille, 70),
+            "apprenti": adulte.apprenti and annees < 3,  # un contrat d'apprentissage dure trois ans au plus
+        }
+        if depart_ and (adulte.age + annees) * 12 >= depart_["age_annees"] * 12 + depart_["age_mois"]:
+            # shortcut: la pension est celle d'une carrière au salaire d'aujourd'hui, comme dans le moteur de retraite.
+            evolution |= {"salaire_brut_mensuel": 0, "au_smic": False, "apprenti": False, "retraite_brute_mensuelle": depart_["pension_mensuelle"]}
+        else:
+            evolution["salaire_brut_mensuel"] = min(adulte.salaire_brut_mensuel * (1 + croissance) ** annees, 100_000)
+        adultes.append(adulte.model_copy(update=evolution))
+    enfants = tuple(age + annees for age in persona.enfants if age + annees < AGE_DE_DEPART_DES_ENFANTS)
+    return persona.model_copy(update={"adultes": tuple(adultes), "enfants": enfants})
+
+
 def salaire_annuel(adulte: Adulte, annee: str, smic: dict[str, float], smic_actuel: dict[str, float]) -> float:
     if adulte.au_smic:
         return smic[annee]

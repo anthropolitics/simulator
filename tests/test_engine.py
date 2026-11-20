@@ -36,7 +36,7 @@ from simulator.engine import (
 )
 from simulator.logement import loyer_au_m2, surface_moyenne
 from simulator.mesures import CATALOGUE, Cout, Mesure, ajouter_impot, ajouter_prestation
-from simulator.persona import ANNEE, Adulte, Depenses, Persona
+from simulator.persona import ANNEE, Adulte, Depenses, Persona, vieillir
 
 
 def seul(salaire, enfants=()):
@@ -456,3 +456,44 @@ def test_le_loyer_d_un_locataire_est_le_sien_ou_a_defaut_estime():
     # Le loyer estimé ouvre les aides au logement et entre dans le bilan, comme un loyer saisi.
     r = simuler(locataire(locataire=True), Scenario())["avant"]
     assert r["aides_logement"] > 0 and r["bilan"]["loyer"] == 12 * locataire(locataire=True).loyer
+
+
+def test_le_foyer_vieillit_sans_que_rien_d_autre_ne_lui_arrive():
+    famille = Persona(adultes=(Adulte(age=40, salaire_brut_mensuel=3000), Adulte(age=61, salaire_brut_mensuel=2000)), enfants=(3, 12, 19))
+    departs = [None, {"age_annees": 63, "age_mois": 6, "pension_mensuelle": 1400, "cumul": 0}]
+    dans_2_ans, dans_3_ans = (vieillir(famille, annees, 0.01, departs) for annees in (2, 3))
+    # Chacun vieillit ; l'enfant de 19 ans a 21 ans et quitte le foyer ; les salaires montent de 1 % par an au-delà des prix.
+    assert [a.age for a in dans_2_ans.adultes] == [42, 63] and dans_2_ans.enfants == (5, 14)
+    assert dans_2_ans.adultes[0].salaire_brut_mensuel == pytest.approx(3000 * 1.01**2)
+    # À 63 ans, le second adulte travaille encore ; à 64 ans, il a passé les 63 ans et 6 mois de son départ et touche sa pension.
+    assert dans_2_ans.adultes[1].retraite_brute_mensuelle == 0 and dans_2_ans.adultes[1].salaire_brut_mensuel > 2000
+    assert (dans_3_ans.adultes[1].salaire_brut_mensuel, dans_3_ans.adultes[1].retraite_brute_mensuelle) == (0, 1400)
+    # Le SMIC suit les prix : un salarié au SMIC y reste, sans salaire saisi à faire monter.
+    smicard = vieillir(Persona(adultes=(Adulte(age=30, au_smic=True, annees_travail_france=2),)), 10, 0.01, [None]).adultes[0]
+    assert (smicard.age, smicard.au_smic, smicard.salaire_brut_mensuel, smicard.annees_travail_france) == (40, True, 0, 12)
+
+
+def test_a_l_horizon_le_salarie_qui_a_atteint_son_depart_touche_sa_pension():
+    # Né en 1964, entré à 22 ans : il travaille aujourd'hui, à 61 ans, et sera parti dans cinq ans.
+    salarie = Persona(adultes=(Adulte(age=61, salaire_brut_mensuel=2500),))
+    aujourd_hui, dans_5_ans = engine.calculer_selon(Scenario(), salarie), engine.calculer_selon(Scenario(), salarie, 5, 0.007)
+    assert aujourd_hui["salaire_net"] > 0 and aujourd_hui["retraite_nette"] == 0 and aujourd_hui["foyer"]["adultes"][0]["age"] == 61
+    assert dans_5_ans["salaire_net"] == 0 and dans_5_ans["foyer"]["adultes"][0]["age"] == 66 and dans_5_ans["retraites"] == [None]
+    assert dans_5_ans["retraite_brute"] == 12 * aujourd_hui["retraites"][0]["pension_mensuelle"]
+
+
+def test_une_reforme_des_retraites_change_qui_travaille_encore_a_l_horizon():
+    # Au SMIC, entré à 22 ans : départ à 65 ans selon la loi actuelle, à 63 ans avec la mesure. À 64 ans, il travaille ou il est retraité.
+    smicard = Persona(adultes=(Adulte(age=40, au_smic=True),))
+    r = simuler(smicard, Scenario(mesures=("retraite_62_ans_60_ans_carrieres_longues",)), annees=24)
+    assert (r["horizon"], r["croissance"]) == (24, 0.007)
+    assert r["avant"]["salaire_net"] > 0 == r["avant"]["retraite_nette"] and r["apres"]["retraite_nette"] > 0 == r["apres"]["salaire_net"]
+    assert r["ecart_revenu_disponible"] < 0  # parti deux ans plus tôt, il vit cette année-là de sa pension
+    # Aujourd'hui, la même mesure ne change rien à ses revenus.
+    assert simuler(smicard, Scenario(mesures=("retraite_62_ans_60_ans_carrieres_longues",)))["ecart_revenu_disponible"] == 0
+
+
+def test_la_projection_fait_monter_les_salaires_avec_la_productivite():
+    r = simuler(seul(2500), Scenario(), annees=10)
+    assert r["avant"]["salaire_brut"] == pytest.approx(2500 * 12 * 1.007**10, abs=1) and r["avant"]["foyer"]["adultes"][0]["age"] == 50
+    assert simuler(seul(2500), Scenario())["horizon"] == 0 and simuler(seul(2500), Scenario())["croissance"] == 0

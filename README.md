@@ -65,6 +65,16 @@ Ces dépenses sont celles de ménages comparables, pas celles du foyer : le sold
 
 Ces trois conventions de financement ne sont le programme d'aucun candidat : elles donnent un ordre de grandeur, à assiettes fixes, et le moteur n'en choisit aucune. Les effets en retour sur l'emploi, les prix ou la croissance, qui changent le coût lui-même, restent des fourchettes sourcées.
 
+## Projection dans le temps
+
+Le moteur peut aussi répondre pour le même foyer dans un an, dans dix ans : le foyer est vieilli, puis simulé comme aujourd'hui. Tout reste en euros d'aujourd'hui.
+
+- **Ce qui bouge** : chacun vieillit ; un enfant quitte le foyer à 21 ans ; les salaires montent plus vite que les prix, au rythme de la productivité du scénario de référence du Conseil d'orientation des retraites (0,7 % par an, 0,4 % et 1,0 % dans ses variantes) ; un salarié qui atteint l'âge de son départ au taux plein touche sa pension à la place de son salaire.
+- **Ce qui ne bouge pas** : la législation, dont les barèmes suivent les prix ; le SMIC, les pensions et le loyer, qui suivent les prix aussi ; l'emploi, la composition du couple, le logement.
+- **Ce que cela montre** : un impôt qui pèse plus quand le salaire monte plus vite que le barème, des allocations qui s'éteignent quand les enfants grandissent, et surtout l'effet d'une mesure sur les retraites, qui ne change rien aux revenus d'aujourd'hui mais décide de qui travaille encore à l'horizon.
+
+Ce n'est pas une prévision : ni promotion, ni chômage, ni naissance, ni décès. La fourchette vient des variantes de productivité ; les effets d'une mesure sur l'emploi ou les prix n'y sont pas.
+
 ## Principes non négociables
 
 Le moteur ne vaut que s'il reste crédible pour tous les bords.
@@ -139,14 +149,14 @@ Le moteur calcule l'avant/après d'un ménage type pour un scénario : une ou pl
 | Fichier | Rôle |
 |---|---|
 | `src/simulator/engine.py` | Le moteur : un persona et un scénario donnent les montants annuels avant et après, détaillés par dispositif, calculés avec OpenFisca-France sur la législation 2025, et le budget du scénario : son coût, les mesures non chiffrées et ce que le financer coûterait au foyer par la TVA, la CSG ou l'impôt sur le revenu, d'après les recettes 2025 de chaque impôt (Insee) ; pour chaque législation, ce que le foyer verse aux administrations publiques, réparti par fonction de dépense (Insee, 2024), ce qu'il en reçoit en argent et en nature (école, santé), et son bilan : entrées, sorties par usage, épargne |
-| `src/simulator/persona.py` | Le ménage type : adultes (âge, salaire, retraite, nationalité, début de carrière…), enfants, loyer et commune, ou pour un locataire sans loyer connu sa surface et son parc (privé ou social), emprunt d'un propriétaire accédant, patrimoine, dépenses de consommation |
+| `src/simulator/persona.py` | Le foyer dans quelques années, pour la projection : âges, départ des enfants, salaires, passage à la retraite. Le ménage type : adultes (âge, salaire, retraite, nationalité, début de carrière…), enfants, loyer et commune, ou pour un locataire sans loyer connu sa surface et son parc (privé ou social), emprunt d'un propriétaire accédant, patrimoine, dépenses de consommation |
 | `src/simulator/logement.py` | Ce que le logement coûte à un foyer qui ne le dit pas. Le remboursement d'emprunt et la taxe foncière d'un propriétaire, en part de ses revenus selon son niveau de vie (enquête Logement 2023-2024). Le loyer d'un locataire, estimé d'après sa commune, sa surface et son foyer : loyer au mètre carré par zone et par parc, surface moyenne par type de ménage (enquêtes Logement 2013, 2020 et 2023-2024, indice de référence des loyers) |
 | `src/simulator/consommation.py` | Les dépenses de consommation d'un ménage, imputées quand le persona ne les donne pas : leur total suit le revenu du foyer et le taux d'épargne des ménages de son niveau de vie (Insee, comptes par catégorie de ménages, déciles de 2024), leur répartition suit son profil (type de ménage, âge, commune, statut d'occupation) d'après l'enquête Budget de famille 2017 de l'Insee, portée aux prix de 2025 : l'énergie poste par poste, le reste regroupé par taux de TVA selon une table qui donne le taux de chaque code de l'enquête, et par usage pour le bilan du foyer. Elles servent aux mesures de TVA, avec une répercussion intégrale des taux sur les prix, et restent fixes d'un scénario à l'autre |
 | `src/simulator/retraites.py` | La retraite de chaque adulte salarié, calculée hors d'OpenFisca par un moteur simplifié (régime général et Agirc-Arrco, carrière au salaire actuel) : âge de départ au taux plein, pension mensuelle brute et cumul sur l'espérance de vie, selon la loi actuelle et selon le scénario |
 | `src/simulator/menages.py` | Les six ménages types, calés sur les statistiques de l'Insee, chaque valeur avec sa source |
 | `src/simulator/tableau.py` | Le tableau publié sur le site : ce que le programme de chaque candidat (ses mesures du catalogue) change pour chaque ménage type |
 | `src/simulator/mesures/` | Le catalogue : un fichier par mesure, avec sa source, la citation exacte, sa traduction en paramètres, les effets que le calcul laisse de côté et, quand une source le chiffre, son coût pour les finances publiques. Une mesure qui ne s'appuie encore que sur une source secondaire est marquée « à confirmer » |
-| `src/simulator/api.py` | L'API FastAPI : `POST /simulation`, `POST /programmes` (les treize programmes pour un foyer saisi, une ligne JSON par candidat), `GET /mesures` et `GET /menages`, ouverte à tous dans la limite de 10 calculs par minute et par adresse IP, documentée sur `/docs` |
+| `src/simulator/api.py` | L'API FastAPI : `POST /simulation` (aujourd'hui ou à un horizon de 1 à 40 ans), `POST /programmes` (les treize programmes pour un foyer saisi, une ligne JSON par candidat), `GET /mesures` et `GET /menages`, ouverte à tous dans la limite de 10 calculs par minute et par adresse IP, documentée sur `/docs` |
 | `tests/` | Tests du moteur, de l'API et de chaque mesure |
 | `Dockerfile` | L'image déployée sur api.anthropolitics.fr |
 | `.github/workflows/ci.yml` | Sur chaque PR et sur `main`, vérifie le lint et le formatage ruff, les types avec mypy, lance les tests avec au moins 90 % de couverture, construit l'image Docker et vérifie qu'elle calcule. `main` n'accepte que des PR à jour aux tests verts ; chaque push sur `main` déclenche le déploiement par le webhook GitHub de Coolify |
