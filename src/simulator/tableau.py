@@ -24,7 +24,8 @@ def programmes() -> dict[str, tuple[str, ...]]:
 
 
 # Les postes du revenu que le site décompose, avant et après : l'écart de pouvoir d'achat est celui du revenu disponible et de la TVA.
-POSTES = ("salaire_net", "retraite_nette", "impots_directs", "prestations_sociales", "revenu_disponible", "tva")
+# S'y ajoutent le bilan du foyer, entrées et sorties, ce qu'il verse aux administrations publiques par fonction de dépense et ce qu'il en reçoit.
+POSTES = ("salaire_net", "retraite_nette", "impots_directs", "prestations_sociales", "revenu_disponible", "tva", "finances_publiques", "bilan")
 
 
 def ligne(candidat: str, menage: str, r: dict) -> dict:
@@ -34,6 +35,7 @@ def ligne(candidat: str, menage: str, r: dict) -> dict:
         "menage": menage,
         "ecart_pouvoir_achat": r["ecart_pouvoir_achat"],
         "ecart_revenu_disponible": r["ecart_revenu_disponible"],
+        "budget": r["budget"],
         "avant": {poste: r["avant"][poste] for poste in POSTES},
         "apres": {poste: r["apres"][poste] for poste in POSTES},
         "retraites": [avant and {"avant": avant, "apres": apres} for avant, apres in zip(r["avant"]["retraites"], r["apres"]["retraites"])],
@@ -46,7 +48,7 @@ def persona_publie(menage: Menage) -> dict:
     Sans elle, le formulaire pré-rempli est invalide et le calcul ne part pas ; et la commune fixe la zone des aides au logement,
     donc le foyer saisi ne reproduirait pas le ménage type.
     """
-    return menage.persona.model_dump(mode="json", include={"adultes", "enfants", "loyer_mensuel", "code_commune"})
+    return menage.persona.model_dump(mode="json", include={"adultes", "enfants", "loyer_mensuel", "code_commune", "accedant"})
 
 
 def tableau() -> dict:

@@ -1,5 +1,6 @@
 """Persona + scénario → ce que le scénario change pour le foyer, calculé avec OpenFisca-France."""
 
+from bisect import bisect
 from concurrent.futures import ProcessPoolExecutor
 from concurrent.futures.process import BrokenProcessPool
 from copy import deepcopy
@@ -15,14 +16,17 @@ from openfisca_france import FranceTaxBenefitSystem
 from openfisca_france.entities import Famille, FoyerFiscal, Individu, Menage
 from pydantic import BaseModel, Field, field_validator
 
-from simulator.consommation import POSTES, TAUX_DU_POSTE, depenses_imputees
+from simulator.consommation import ENERGIE, POSTES, TAUX_DU_POSTE, Profil, depenses_imputees, par_usage, taux_d_epargne
+from simulator.logement import REMBOURSEMENTS, TAXE_FONCIERE, part_des_revenus
 from simulator.mesures import CATALOGUE, vers_famille, vers_menage
 from simulator.persona import ANNEE, ANNEES, HEURES_TEMPS_PLEIN, Adulte, Depenses, Persona, salaire_annuel, situation
 from simulator.retraites import PARAMETRES_ACTUELS, Parametres, depart
 
 # Montants annuels du ménage rendus pour chaque législation. Les impôts sont négatifs : ce que le foyer paie.
 SORTIES = (
+    "salaire_brut",
     "salaire_net",
+    "retraite_brute",
     "retraite_nette",
     "csg",
     "impot_revenu",
@@ -38,8 +42,28 @@ SORTIES = (
     "cout_du_travail",
     *(f"depense_{poste}" for poste in POSTES),
 )
-VARIABLES_SORTIES = {"impot_revenu": "irpp_economique"}
+VARIABLES_SORTIES = {"impot_revenu": "irpp_economique", "salaire_brut": "salaire_de_base"}
 VERSIONS = {paquet: version(paquet) for paquet in ("simulator", "openfisca-france")}
+# Recettes de 2025 des impôts qui peuvent financer une mesure, en milliards d'euros, l'impôt sur le revenu avant crédits d'impôt
+# (Insee, comptes nationaux annuels, base 2020, « Impôts — Données annuelles de 1995 à 2025 », données provisoires,
+# https://www.insee.fr/fr/statistiques/2381408, consulté le 19 novembre 2026).
+RECETTES = {"tva": 208.8, "csg": 156.6, "impot_revenu": 103.6}
+# Dépenses des administrations publiques (État, Sécurité sociale, collectivités) en 2024, par fonction, en milliards d'euros. Les intérêts de
+# la dette, que l'Insee compte dans les services généraux (181 Md€), en sont séparés (Insee Première n° 2093, 5 février 2026, figure 2a,
+# données provisoires, https://www.insee.fr/fr/statistiques/8735252, consulté le 19 novembre 2026).
+DEPENSES_PUBLIQUES = {
+    "protection_sociale": 693,  # retraites, chômage, famille, solidarité, aides au logement ; hors santé
+    "sante": 261,
+    "affaires_economiques": 166,
+    "enseignement": 149,
+    "services_generaux": 121,
+    "charge_de_la_dette": 60,
+    "defense": 54,
+    "ordre_et_securite": 52,
+    "loisirs_culture": 43,
+    "logement_equipements_collectifs": 42,
+    "environnement": 30,
+}
 
 
 def _appeler(formule, entite, period, parameters):
@@ -251,6 +275,97 @@ def smic_annuel(legislation) -> dict[str, float]:
 SMIC_ACTUEL = smic_annuel(LOI_ACTUELLE)
 
 
+# Ce que les administrations publiques dépensent pour le foyer sans le lui verser. École : dépense moyenne par élève en 2024 selon l'âge de
+# l'enfant, donc son niveau : préélémentaire de 3 à 5 ans, élémentaire de 6 à 10 ans, collège de 11 à 14 ans, lycée général et
+# technologique de 15 à 17 ans (le lycée professionnel coûte 14 700 €), enseignement supérieur de 18 à 25 ans, un enfant à charge de cet
+# âge étant pris pour étudiant (DEPP, reprise par l'Insee, « Dépenses d'éducation », figure 3, https://www.insee.fr/fr/statistiques/8612572) ;
+# et la part qu'en financent l'État, les collectivités et les autres administrations : 94 % dans le premier degré, 89 % dans le second,
+# 68 % dans le supérieur (DEPP, « L'état de l'École 2025 », figure 9.3,
+# https://www.education.gouv.fr/sites/default/files/document/l-tat-de-l-cole-2025-478952.pdf, consulté le 20 novembre 2026).
+# Santé : la dépense publique de santé de 2024 par habitant, pour 68,6 millions d'habitants (Insee Première n° 2033,
+# https://www.insee.fr/fr/statistiques/8327319), répartie selon l'âge comme les soins remboursés par l'assurance maladie en 2023 : montant
+# moyen par personne de 0 à 10 ans, puis par tranche de dix ans jusqu'à plus de 80 ans, pour 2 496 € en moyenne (DREES, « Dépenses de santé
+# et restes à charge », https://data.drees.solidarites-sante.gouv.fr/explore/dataset/depenses-de-sante-et-restes-a-charge/).
+# Sources consultées le 19 novembre 2026.
+DEPENSE_PUBLIQUE_PAR_ELEVE = {
+    range(3, 6): 0.94 * 8990,
+    range(6, 11): 0.94 * 9130,
+    range(11, 15): 0.89 * 10_450,
+    range(15, 18): 0.89 * 13_020,
+    range(18, 26): 0.68 * 13_300,
+}
+SANTE_PAR_HABITANT = DEPENSES_PUBLIQUES["sante"] * 1e9 / 68.6e6
+REMBOURSE_SELON_L_AGE, REMBOURSE_EN_MOYENNE = (925, 887, 1134, 1477, 1713, 2557, 3822, 5587, 7858), 2496
+
+
+def sante(age: int) -> float:
+    """Dépense publique de santé d'une personne de cet âge, par an."""
+    # shortcut: le profil par âge est celui des soins remboursés ; l'hébergement médico-social, que cette base ne couvre pas, pèserait
+    # davantage sur les plus âgés. Prendre un profil de toute la dépense publique de santé s'il en paraît un.
+    return SANTE_PAR_HABITANT * REMBOURSE_SELON_L_AGE[bisect(range(11, 91, 10), age)] / REMBOURSE_EN_MOYENNE
+
+
+def finances_publiques(m: dict[str, int], persona: Persona) -> dict:
+    """Ce que le foyer verse aux administrations publiques, réparti comme elles dépensent, et ce qu'il en reçoit, en argent et en nature."""
+    # Versé : cotisations salariales, CSG et CRDS (l'écart du brut au net), impôts directs et TVA ; ni les cotisations des employeurs
+    # (voir cout_du_travail), ni les taxes que le moteur ne calcule pas (carburants, tabac, taxe foncière). Reçu : pensions et prestations.
+    verse = m["salaire_brut"] + m["retraite_brute"] - m["salaire_net"] - m["retraite_nette"] - m["impots_directs"] - m["tva"]
+    recu = m["retraite_brute"] + m["prestations_sociales"]
+    # shortcut: un euro versé finance chaque fonction selon son poids dans la dépense de 2024, quel que soit l'impôt ; affecter chaque
+    # prélèvement à sa caisse (cotisations vieillesse aux retraites) si le site doit dire où va tel impôt.
+    total = sum(DEPENSES_PUBLIQUES.values())
+    en_nature = {
+        "enseignement": round(sum(cout for ages, cout in DEPENSE_PUBLIQUE_PAR_ELEVE.items() for age in persona.enfants if age in ages)),
+        "sante": round(sum(sante(age) for age in (*(a.age for a in persona.adultes), *persona.enfants))),
+    }
+    return {
+        "verse": verse,
+        "depenses": {poste: round(verse * md / total) for poste, md in DEPENSES_PUBLIQUES.items()},
+        "recu": recu,
+        "en_nature": en_nature,
+    }
+
+
+def logement(persona: Persona, m: dict) -> dict[str, int]:
+    """Ce que le foyer paie par an pour se loger, hors énergie et charges : un loyer, ou le remboursement d'un emprunt et la taxe foncière."""
+    niveau_de_vie = m["revenu_disponible"] / persona.unites_de_consommation
+    # Les parts de l'enquête Logement s'appliquent aux revenus avant impôts directs et hors aides au logement.
+    revenus = m["revenu_disponible"] - m["impots_directs"] - m["aides_logement"]
+    estime = part_des_revenus(REMBOURSEMENTS, niveau_de_vie) * revenus if persona.accedant else 0
+    # Sans loyer, le foyer est tenu pour propriétaire : il paie la taxe foncière.
+    taxe_fonciere = 0 if persona.loyer else part_des_revenus(TAXE_FONCIERE[persona.rembourse_un_emprunt], niveau_de_vie) * revenus
+    return {
+        "loyer": round(persona.loyer * 12),
+        "remboursement_emprunt": round(persona.remboursement_mensuel * 12 or estime),
+        "taxe_fonciere": round(taxe_fonciere),
+    }
+
+
+def hors_loyer(persona: Persona, m: dict) -> float:
+    """Ce que le foyer consomme par an hors loyer, d'après le taux d'épargne des ménages de son niveau de vie."""
+    charges = logement(persona, m)
+    depense = (1 - taux_d_epargne(m["revenu_disponible"] / persona.unites_de_consommation)) * (m["revenu_disponible"] - charges["taxe_fonciere"])
+    # Le remboursement d'un emprunt tient lieu de loyer. Un loyer plus lourd que la dépense ne laisse rien : le solde devient négatif.
+    return max(depense - charges["loyer"] - charges["remboursement_emprunt"], 0)
+
+
+def bilan(m: dict, usages: dict[str, int], charges: dict[str, int], tva_actuelle: int) -> dict:
+    """Entrées et sorties annuelles du foyer : revenus nets et prestations, impôts, logement et consommation par usage ; le solde est son épargne."""
+    entrees = {"salaires": m["salaire_net"], "retraites": m["retraite_nette"], "prestations": m["prestations_sociales"]}
+    sorties = usages | {"impots_directs": -m["impots_directs"]} | {poste: charges[poste] for poste in ("taxe_fonciere", "remboursement_emprunt")}
+    # Le loyer est compté avant les aides au logement, qui font partie des prestations.
+    sorties["logement"] += charges["loyer"] + sum(m[f"depense_{poste}"] for poste in ENERGIE if poste != "carburants")
+    sorties["transports"] += m["depense_carburants"]
+    sorties["tva_du_scenario"] = tva_actuelle - m["tva"]  # les mêmes achats, aux prix du scénario
+    return {"entrees": entrees, "sorties": sorties, "solde": sum(entrees.values()) - sum(sorties.values()), "loyer": charges["loyer"]}
+
+
+def profil(persona: Persona) -> Profil:
+    """Ce qui distingue le foyer du ménage moyen de son niveau de vie, pour répartir sa consommation."""
+    comme_un_locataire = persona.loyer > 0 or persona.rembourse_un_emprunt
+    return Profil(len(persona.adultes), bool(persona.enfants), max(a.age for a in persona.adultes), comme_un_locataire, persona.zone)
+
+
 def calculer(legislation, persona: Persona) -> dict[str, int]:
     foyer = situation(persona, smic_annuel(legislation), SMIC_ACTUEL)
     if any(a.retraite_brute_mensuelle for a in persona.adultes):
@@ -260,11 +375,18 @@ def calculer(legislation, persona: Persona) -> dict[str, int]:
         premiere = SimulationBuilder().build_from_entities(legislation, situation(persona, smic_annuel(legislation), SMIC_ACTUEL))
         foyer["foyers_fiscaux"]["foyer"]["rfr"] = {str(int(ANNEE) - 2): float(premiere.calculate("rfr", ANNEES[0])[0])}
     simulation = SimulationBuilder().build_from_entities(legislation, foyer)
+
+    def annuel(sortie: str) -> int:
+        return round(float(simulation.calculate_add(VARIABLES_SORTIES.get(sortie, sortie), ANNEE).sum()))
+
     if manquantes := [poste for poste, montant in persona.depenses if montant is None]:
-        imputees = depenses_imputees(float(simulation.calculate("niveau_de_vie", ANNEE)[0]))
+        # Les revenus ne dépendent pas des dépenses : ils fixent ce que le foyer consomme, donc ses dépenses manquantes.
+        revenus = {sortie: annuel(sortie) for sortie in ("revenu_disponible", "impots_directs", "aides_logement")}
+        niveau_de_vie = revenus["revenu_disponible"] / persona.unites_de_consommation
+        imputees = depenses_imputees(niveau_de_vie, profil(persona), hors_loyer(persona, revenus))
         for poste in manquantes:
             simulation.set_input(f"depense_{poste}", ANNEE, [imputees[poste]])
-    return {sortie: round(float(simulation.calculate_add(VARIABLES_SORTIES.get(sortie, sortie), ANNEE).sum())) for sortie in SORTIES}
+    return {sortie: annuel(sortie) for sortie in SORTIES}
 
 
 def parametres_retraite(scenario: Scenario) -> Parametres:
@@ -290,7 +412,28 @@ def retraites(persona: Persona, smic: dict[str, float], parametres: Parametres) 
 
 def calculer_selon(scenario: Scenario, persona: Persona) -> dict:
     legislation = loi(scenario)
-    return calculer(legislation, persona) | {"retraites": retraites(persona, smic_annuel(legislation), parametres_retraite(scenario))}
+    montants = calculer(legislation, persona)
+    return montants | {
+        "retraites": retraites(persona, smic_annuel(legislation), parametres_retraite(scenario)),
+        "finances_publiques": finances_publiques(montants, persona),
+    }
+
+
+def budget(scenario: Scenario, apres: dict) -> dict | None:
+    """Ce que les mesures chiffrées du scénario coûtent aux finances publiques, et ce que le financer coûterait au foyer selon l'impôt relevé."""
+    couts = {mesure: CATALOGUE[mesure].cout for mesure in scenario.mesures}
+    chiffres = [cout for cout in couts.values() if cout]
+    if not chiffres:
+        return None
+    cout = {borne: round(sum(getattr(c, borne) for c in chiffres), 2) for borne in ("bas", "haut")}
+    # Tous les taux d'un impôt sont relevés dans la proportion qui rapporte le coût : le foyer paie cet impôt dans la même proportion de plus.
+    # Un scénario qui rapporte donne, à l'inverse, ce que le foyer gagnerait si la recette lui était rendue par une baisse de cet impôt.
+    # shortcut: assiettes fixes, sans la CSG déductible de l'impôt sur le revenu ; simuler la hausse si une contrepartie change une conclusion.
+    return {
+        "cout": cout,
+        "non_chiffrees": [mesure for mesure, c in couts.items() if not c],
+        "contreparties": {impot: {borne: round(apres[impot] * md / recette) for borne, md in cout.items()} for impot, recette in RECETTES.items()},
+    }
 
 
 def brut_depuis_net(net_mensuel: float, legislation=LOI_ACTUELLE) -> float:
@@ -332,12 +475,17 @@ def simuler(persona: Persona, scenario: Scenario) -> dict:
     # Le scénario garde la consommation de la loi actuelle : une mesure ne la change que par les prix (incidence statique).
     depenses = Depenses(**{poste: avant[f"depense_{poste}"] for poste in POSTES})
     apres = avant if scenario.neutre else lancer("scenario", scenario, persona.model_copy(update={"depenses": depenses})).result()
+    # shortcut: la consommation hors énergie suit le revenu et le profil du foyer, même s'il a saisi ses dépenses par taux de TVA ;
+    # demander les dépenses par usage si le site les fait saisir.
+    usages = par_usage(avant["revenu_disponible"] / persona.unites_de_consommation, profil(persona), hors_loyer(persona, avant))
+    charges = logement(persona, avant)  # tenues fixes d'un scénario à l'autre, comme la consommation
     return {
         "annee": int(ANNEE),
         "mesures": list(scenario.mesures),
-        "avant": avant,
-        "apres": apres,
+        "avant": avant | {"bilan": bilan(avant, usages, charges, avant["tva"])},
+        "apres": apres | {"bilan": bilan(apres, usages, charges, avant["tva"])},
         "ecart_revenu_disponible": apres["revenu_disponible"] - avant["revenu_disponible"],
         "ecart_pouvoir_achat": apres["revenu_disponible"] + apres["tva"] - avant["revenu_disponible"] - avant["tva"],
+        "budget": budget(scenario, apres),
         "versions": VERSIONS,
     }

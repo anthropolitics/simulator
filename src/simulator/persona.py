@@ -1,6 +1,9 @@
 """Le persona : un ménage type, traduit en situation OpenFisca."""
 
+from openfisca_france.model.prestations import aides_logement
 from pydantic import BaseModel, Field, model_validator
+
+from simulator.logement import loyer_au_m2, surface_moyenne
 
 ANNEE = "2025"
 # Les minima sociaux regardent les revenus des mois précédents : sans l'année d'avant, OpenFisca verse un RSA fantôme.
@@ -48,7 +51,14 @@ class Depenses(BaseModel, frozen=True):
 class Persona(BaseModel, frozen=True):
     adultes: tuple[Adulte, ...] = Field(min_length=1, max_length=2, description="Deux adultes forment un couple marié.")
     enfants: tuple[int, ...] = Field(default=(), max_length=6, description="Âge de chaque enfant à charge.")
-    loyer_mensuel: float = Field(default=0, ge=0, le=20_000)
+    loyer_mensuel: float = Field(default=0, ge=0, le=20_000, description="Loyer hors charges ; laissé à zéro, celui d'un locataire est estimé.")
+    locataire: bool = Field(default=False, description="Locataire : sans loyer saisi, il est estimé d'après la commune, la surface et le foyer.")
+    surface_logement: float | None = Field(
+        default=None, gt=0, le=1000, description="Surface du logement loué, en m² ; à défaut, la surface moyenne des locataires du même type de ménage."
+    )
+    logement_social: bool = Field(default=False, description="Logement du parc social, aux loyers plus bas que ceux du parc privé.")
+    accedant: bool = Field(default=False, description="Propriétaire qui rembourse un emprunt : sans mensualité saisie, elle est estimée d'après ses revenus.")
+    remboursement_mensuel: float = Field(default=0, ge=0, le=50_000, description="Mensualité de l'emprunt du logement d'un propriétaire.")
     code_commune: str | None = Field(default=None, pattern="^[0-9AB]{5}$", description="Code INSEE ; il fixe la zone des aides au logement.")
     patrimoine_financier: float = Field(default=0, ge=0, description="Patrimoine financier net du foyer.")
     patrimoine_immobilier: float = Field(default=0, ge=0, description="Patrimoine immobilier net du foyer, résidence principale comprise.")
@@ -72,9 +82,39 @@ class Persona(BaseModel, frozen=True):
 
     @model_validator(mode="after")
     def commune_si_loyer(self):
-        if self.loyer_mensuel and self.code_commune is None:
+        if (self.loyer_mensuel or self.locataire) and self.code_commune is None:
             raise ValueError("Un loyer demande le code de la commune, qui fixe la zone des aides au logement.")
         return self
+
+    @model_validator(mode="after")
+    def locataire_ou_proprietaire(self):
+        if (self.loyer_mensuel or self.locataire) and (self.accedant or self.remboursement_mensuel):
+            raise ValueError("Un foyer paie un loyer ou rembourse l'emprunt de son logement, pas les deux.")
+        return self
+
+    @property
+    def unites_de_consommation(self) -> float:
+        """Échelle de l'Insee : 1 pour le premier adulte, 0,5 pour toute autre personne de 14 ans ou plus, 0,3 par enfant plus jeune."""
+        return 1 + 0.5 * (len(self.adultes) - 1 + sum(age >= 14 for age in self.enfants)) + 0.3 * sum(age < 14 for age in self.enfants)
+
+    @property
+    def rembourse_un_emprunt(self) -> bool:
+        return self.accedant or self.remboursement_mensuel > 0
+
+    @property
+    def zone(self) -> int | None:
+        """Zone des aides au logement de la commune, de 1 à 3, si OpenFisca-France la connaît."""
+        aides_logement.preload_zone_apl()  # la table des zones par commune, lue une fois
+        return aides_logement.zone_apl_by_depcom.get(self.code_commune)
+
+    @property
+    def loyer(self) -> float:
+        """Loyer mensuel hors charges : celui que le foyer a saisi ; sinon, pour un locataire, sa surface au loyer moyen de sa zone."""
+        if self.loyer_mensuel or not self.locataire:
+            return self.loyer_mensuel
+        age = max(adulte.age for adulte in self.adultes)
+        surface = self.surface_logement or surface_moyenne(self.logement_social, len(self.adultes), len(self.enfants), age)
+        return round(surface * loyer_au_m2(self.zone, self.logement_social))
 
     @model_validator(mode="after")
     def enfants_mineurs_ou_etudiants(self):
@@ -126,9 +166,9 @@ def situation(persona: Persona, smic: dict[str, float], smic_actuel: dict[str, f
                 "duree_possession_titre_sejour": {annee: premier.annees_titre_sejour for annee in ANNEES},
             }
     menage: dict = {"personne_de_reference": adultes[:1], "conjoint": adultes[1:], "enfants": petits}
-    if persona.loyer_mensuel:
+    if persona.loyer:
         menage |= {
-            "loyer": {annee: persona.loyer_mensuel * 12 for annee in ANNEES},
+            "loyer": {annee: persona.loyer * 12 for annee in ANNEES},
             "depcom": {annee: persona.code_commune for annee in ANNEES},
             "statut_occupation_logement": {annee: "locataire_vide" for annee in ANNEES},
         }

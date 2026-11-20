@@ -1,4 +1,4 @@
-from simulator.mesures import Mesure
+from simulator.mesures import Cout, Mesure
 
 PARTS_DEUXIEME_ENFANT = 1  # une part au lieu d'une demi-part
 
@@ -37,4 +37,5 @@ MESURE = Mesure(
     appliquer=appliquer,
     a_confirmer=True,  # le dossier de presse du 6 octobre 2026 n'est connu que par la presse et une note de l'Institut de l'Entreprise
     hypotheses="Les effets sur la natalité et sur l'activité des parents ne sont pas calculés, pas plus que le financement de la mesure.",
+    cout=Cout(2.86, 2.86, "Contre-budget 2026 du groupe RN, 23 octobre 2025 : https://rassemblementnational.fr/documents/GRN-CONTRE-BUDGET-2026.pdf#page=7"),
 )

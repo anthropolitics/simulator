@@ -6,9 +6,36 @@ from openfisca_core.model_api import YEAR, Variable
 from openfisca_france.entities import Famille, FoyerFiscal
 
 from simulator import engine
-from simulator.consommation import CODES_2017, DEPENSES_2017, decile, depenses_imputees
-from simulator.engine import LOI_ACTUELLE, SMIC_ACTUEL, TAUX_ACTUEL, Scenario, brut_depuis_net, calculer, loi, parametres_retraite, retraites, simuler
-from simulator.mesures import CATALOGUE, Mesure, ajouter_impot, ajouter_prestation
+from simulator.consommation import (
+    CATEGORIES,
+    CODES_2017,
+    DEPENSES_2017,
+    LOYER,
+    Profil,
+    decile,
+    depenses_imputees,
+    multiplicateurs,
+    par_categorie,
+    par_usage,
+    taux_d_epargne,
+)
+from simulator.engine import (
+    DEPENSES_PUBLIQUES,
+    LOI_ACTUELLE,
+    RECETTES,
+    SMIC_ACTUEL,
+    TAUX_ACTUEL,
+    Scenario,
+    brut_depuis_net,
+    budget,
+    calculer,
+    loi,
+    parametres_retraite,
+    retraites,
+    simuler,
+)
+from simulator.logement import loyer_au_m2, surface_moyenne
+from simulator.mesures import CATALOGUE, Cout, Mesure, ajouter_impot, ajouter_prestation
 from simulator.persona import ANNEE, Adulte, Depenses, Persona
 
 
@@ -118,14 +145,17 @@ def test_pas_d_ifi_jusqu_a_1_3_million():
 
 
 def test_le_decile_de_niveau_de_vie():
-    # 16 680 € et 18 990 € de 2018 bornent le 4e décile ; en euros de 2025, un niveau de vie de 20 000 € y tombe.
-    assert (decile(5_000), decile(20_000), decile(100_000)) == (1, 4, 10)
+    # 17 700 € et 20 980 € de 2024 bornent le 3e dixième ; un niveau de vie de 20 000 € de 2025, soit 19 813 € de 2024, y tombe.
+    assert (decile(5_000), decile(20_000), decile(100_000)) == (1, 3, 10)
 
 
-def test_une_depense_absente_est_imputee_selon_le_niveau_de_vie():
-    m = calculer(LOI_ACTUELLE, Persona(adultes=(Adulte(au_smic=True),), depenses=Depenses(electricite=1800)))
-    imputees = depenses_imputees(m["revenu_disponible"])  # une personne seule compte pour une unité de consommation
+def test_une_depense_absente_est_imputee_selon_le_revenu_et_le_profil():
+    persona = Persona(adultes=(Adulte(au_smic=True),), depenses=Depenses(electricite=1800))
+    m = calculer(LOI_ACTUELLE, persona)
+    # Une personne seule compte pour une unité de consommation : son niveau de vie est son revenu disponible.
+    imputees = depenses_imputees(m["revenu_disponible"], engine.profil(persona), engine.hors_loyer(persona, m))
     assert m["depense_electricite"] == 1800 and m["depense_carburants"] == imputees["carburants"] > 0
+    assert imputees["carburants"] < depenses_imputees(m["revenu_disponible"])["carburants"]  # elle roule moins que le ménage moyen
 
 
 def test_imputation_hors_energie_d_un_menage_du_premier_decile():
@@ -241,3 +271,188 @@ def test_les_parametres_des_mesures_se_cumulent():
     p = loi(Scenario(mesures=("smic_2000_brut", "tva_sociale"))).parameters(f"{ANNEE}-01-01")
     assert p.marche_travail.salaire_minimum.smic.smic_b_mensuel == pytest.approx(2000)  # perdu tant que chaque mesure repartait de la loi actuelle
     assert p.taxation_indirecte.tva.taux_normal == pytest.approx(0.215)
+
+
+def test_le_budget_additionne_les_couts_et_les_rapporte_au_foyer(monkeypatch):
+    for id, cout in (("depense", Cout(9, 38.5, "candidat ; institut")), ("recette", Cout(-4, -4, "candidat")), ("muette", None)):
+        monkeypatch.setitem(CATALOGUE, id, Mesure(id=id, titre=id, candidats=(), source="", citation="", traduction="", cout=cout))
+    # Un foyer qui paie un cent-millionième de la TVA et de la CSG du pays, et pas d'impôt sur le revenu.
+    apres = {"tva": -2088, "csg": -1566, "impot_revenu": 0}
+    b = budget(Scenario(mesures=("depense", "recette", "muette")), apres)
+    assert b is not None and b["cout"] == {"bas": 5, "haut": 34.5} and b["non_chiffrees"] == ["muette"]
+    # Financer 5 Md€ par la seule TVA la relève de 5 / 208,8 : le foyer en paie sa part, 50 € ; rien par un impôt qu'il ne paie pas.
+    assert b["contreparties"] == {"tva": {"bas": -50, "haut": -345}, "csg": {"bas": -50, "haut": -345}, "impot_revenu": {"bas": 0, "haut": 0}}
+    assert set(b["contreparties"]) == set(RECETTES)
+    # Une économie se lit dans l'autre sens : ce que le foyer gagnerait si elle lui était rendue.
+    assert budget(Scenario(mesures=("recette",)), apres)["contreparties"]["tva"] == {"bas": 40, "haut": 40}
+    assert budget(Scenario(mesures=("muette",)), apres) is None and budget(Scenario(), apres) is None
+
+
+def test_un_cout_cite_sa_source_et_va_du_plus_bas_au_plus_haut():
+    for bas, haut, source in ((2, 1, "candidat"), (1, 2, "")):
+        with pytest.raises(AssertionError):
+            Cout(bas, haut, source)
+
+
+def test_la_simulation_porte_le_budget_du_scenario():
+    r = simuler(seul(2500), Scenario(mesures=("part_fiscale_deuxieme_enfant",)))
+    assert r["budget"]["cout"] == {"bas": 2.86, "haut": 2.86}
+    assert r["budget"]["contreparties"]["tva"]["haut"] == round(r["apres"]["tva"] * 2.86 / RECETTES["tva"]) < 0
+    assert simuler(seul(2500), Scenario())["budget"] is None
+
+
+def test_le_foyer_verse_ses_prelevements_repartis_comme_la_depense_publique():
+    m = simuler(seul(2500), Scenario())["avant"]
+    f = m["finances_publiques"]
+    # Un salarié seul : l'écart du brut au net (cotisations, CSG, CRDS), ses impôts directs et sa TVA ; il ne reçoit que ses prestations.
+    assert f["verse"] == 2500 * 12 - m["salaire_net"] - m["impots_directs"] - m["tva"] and f["recu"] == m["prestations_sociales"]
+    assert f["verse"] > -(m["csg"] + m["impots_directs"] + m["tva"]) > 0
+    assert set(f["depenses"]) == set(DEPENSES_PUBLIQUES) and sum(f["depenses"].values()) == pytest.approx(f["verse"], abs=len(DEPENSES_PUBLIQUES))
+    assert f["depenses"]["charge_de_la_dette"] == round(f["verse"] * 60 / sum(DEPENSES_PUBLIQUES.values())) > 0
+    # L'Insee compte 1 672 Md€ de dépenses, arrondis de chaque fonction compris.
+    assert sum(DEPENSES_PUBLIQUES.values()) == pytest.approx(1672, abs=2)
+
+
+def test_un_retraite_recoit_sa_pension_brute_et_verse_ses_prelevements():
+    m = engine.calculer_selon(Scenario(), Persona(adultes=(Adulte(age=70, retraite_brute_mensuelle=1500),)))
+    f = m["finances_publiques"]
+    assert f["recu"] == 18_000 + m["prestations_sociales"]
+    assert f["verse"] == 18_000 - m["retraite_nette"] - m["impots_directs"] - m["tva"]
+
+
+def test_la_consommation_par_usage_reprend_l_enquete_sans_le_loyer():
+    # Premier décile : 14 538 € de consommation hors énergie en 2017, dont 1 840 € de loyer ; le reste est porté aux prix de 2025.
+    usages = par_usage(10_000)
+    assert sum(usages.values()) == pytest.approx((14_538 - CODES_2017[LOYER][1][0]) * 120.95 / 101.22, abs=len(usages))
+    assert usages["alimentation"] == round(2863 * 120.95 / 101.22) and usages["enseignement"] == round(296 * 120.95 / 101.22)
+
+
+def test_le_bilan_met_le_loyer_et_l_energie_au_logement_et_solde_les_entrees_et_les_sorties():
+    m = {"salaire_net": 20_000, "retraite_nette": 0, "prestations_sociales": 1000, "impots_directs": -500, "tva": -2100}
+    m |= {"depense_electricite": 700, "depense_gaz": 300, "depense_fioul": 0, "depense_autres_energies_logement": 100, "depense_carburants": 900}
+    charges = {"loyer": 7200, "remboursement_emprunt": 0, "taxe_fonciere": 0}
+    b = engine.bilan(m, {"logement": 1000, "transports": 2000, "alimentation": 3000}, charges, tva_actuelle=-2000)
+    assert b["entrees"] == {"salaires": 20_000, "retraites": 0, "prestations": 1000}
+    # Les mêmes achats coûtent 100 € de TVA de plus avec le scénario.
+    achats = {"logement": 1000 + 7200 + 1100, "transports": 2900, "alimentation": 3000, "tva_du_scenario": 100}
+    assert b["sorties"] == achats | {"impots_directs": 500, "taxe_fonciere": 0, "remboursement_emprunt": 0}
+    assert b["solde"] == 21_000 - 15_800 and b["loyer"] == 7200
+    # Un accédant : son remboursement et sa taxe foncière sortent à part, hors du logement.
+    accedant = engine.bilan(m, {"logement": 1000, "transports": 0}, {"loyer": 0, "remboursement_emprunt": 9000, "taxe_fonciere": 800}, tva_actuelle=-2100)
+    assert (accedant["sorties"]["logement"], accedant["sorties"]["remboursement_emprunt"], accedant["sorties"]["taxe_fonciere"]) == (2100, 9000, 800)
+
+
+def test_le_foyer_recoit_en_nature_l_ecole_de_ses_enfants_et_la_sante_selon_leur_age():
+    famille = Persona(adultes=(Adulte(age=45), Adulte(age=82)), enfants=(2, 5, 8, 12, 16, 19))
+    m = dict.fromkeys(("salaire_brut", "retraite_brute", "salaire_net", "retraite_nette", "impots_directs", "tva", "prestations_sociales"), 0)
+    en_nature = engine.finances_publiques(m, famille)["en_nature"]
+    # Pas d'école à 2 ans ; puis maternelle, élémentaire, collège, lycée, supérieur : la part publique de la dépense par élève de chaque niveau.
+    assert en_nature["enseignement"] == round(0.94 * (8990 + 9130) + 0.89 * (10_450 + 13_020) + 0.68 * 13_300)
+    # La dépense publique de santé par habitant, pondérée selon l'âge : 41-50 ans, plus de 80 ans, trois enfants de 0 à 10 ans, trois de 11 à 20 ans.
+    assert en_nature["sante"] == round(261e9 / 68.6e6 * (1713 + 7858 + 3 * 925 + 3 * 887) / 2496)
+    assert engine.sante(80) < engine.sante(81) and engine.sante(10) > engine.sante(11)
+
+
+def test_la_simulation_porte_le_bilan_avant_et_apres():
+    r = simuler(seul(2500), Scenario(mesures=("tva_sociale",)))
+    avant, apres = r["avant"], r["apres"]
+    assert avant["bilan"]["solde"] == pytest.approx(avant["revenu_disponible"] - sum(avant["bilan"]["sorties"].values()) - avant["impots_directs"], abs=2)
+    assert avant["bilan"]["sorties"]["tva_du_scenario"] == 0 < apres["bilan"]["sorties"]["tva_du_scenario"] == avant["tva"] - apres["tva"]
+    # La hausse de TVA ne change que le prix des achats : le solde baisse d'autant que le pouvoir d'achat.
+    assert apres["bilan"]["solde"] - avant["bilan"]["solde"] == r["ecart_pouvoir_achat"]
+
+
+def test_le_profil_ne_deplace_que_la_repartition_des_depenses():
+    assert set(multiplicateurs(3, None).values()) == {1.0}
+    moyen, m = par_categorie(3), multiplicateurs(3, Profil(adultes=1, enfants=False, age=40, locataire=True, zone=2))
+    assert sum(moyen[c] * m[c] for c in CATEGORIES) == pytest.approx(sum(moyen.values()))
+    # Le total vient d'ailleurs : la dépense hors loyer du foyer, que les postes soumis à la TVA et les usages se partagent, énergie comprise.
+    seul = Profil(adultes=1, enfants=False, age=40, locataire=True, zone=2)
+    postes, usages = depenses_imputees(20_000, seul, 12_000), par_usage(20_000, seul, 12_000)
+    assert sum(usages.values()) + sum(postes[p] for p in ("electricite", "gaz", "fioul", "autres_energies_logement", "carburants")) == pytest.approx(
+        12_000, abs=10
+    )
+    assert depenses_imputees(20_000, seul, 6000)["carburants"] == pytest.approx(postes["carburants"] / 2, abs=1)
+
+
+def test_le_profil_deplace_les_depenses_comme_l_enquete():
+    def famille(age=40, locataire=False, zone=None):
+        return Profil(adultes=2, enfants=True, age=age, locataire=locataire, zone=zone)
+
+    # À la campagne, on roule plus qu'à Paris ; à 78 ans, on dépense plus pour se chauffer et moins pour s'habiller qu'à 30 ans.
+    assert depenses_imputees(20_000, famille(zone=3))["carburants"] > 2 * depenses_imputees(20_000, famille(zone=1))["carburants"]
+    jeune, age = (depenses_imputees(20_000, famille(age=a)) for a in (30, 78))
+    assert age["electricite"] > jeune["electricite"] and par_usage(20_000, famille(age=78))["habillement"] < par_usage(20_000, famille(age=30))["habillement"]
+
+
+def test_le_taux_d_epargne_suit_le_niveau_de_vie():
+    prix = 120.95 / 119.82  # de 2024 à 2025
+    # Au niveau de vie médian d'un cinquième (déciles 1, 3, 5, 7, 9 de 2024), son taux ; entre deux, l'interpolation ; au-delà, le dernier.
+    assert taux_d_epargne(13_970 * prix) == pytest.approx(0.0271) and taux_d_epargne(26_740 * prix) == pytest.approx(0.0965)
+    assert taux_d_epargne((20_980 + 26_740) / 2 * prix) == pytest.approx((0.0499 + 0.0965) / 2)
+    assert taux_d_epargne(5000) == pytest.approx(0.0271) and taux_d_epargne(200_000) == pytest.approx(0.2837)
+
+
+def test_un_proprietaire_paie_la_taxe_fonciere_et_un_accedant_rembourse_son_emprunt():
+    m = {"revenu_disponible": 30_000, "impots_directs": -2000, "aides_logement": 0}  # 32 000 € de revenus avant impôts, entre le 2e et le 3e quart
+    sans_emprunt, accedant = (engine.logement(Persona(adultes=(Adulte(),), accedant=a), m) for a in (False, True))
+    assert sans_emprunt["loyer"] == sans_emprunt["remboursement_emprunt"] == 0 and 0.025 * 32_000 < sans_emprunt["taxe_fonciere"] < 0.032 * 32_000
+    assert 0.191 * 32_000 < accedant["remboursement_emprunt"] < 0.216 * 32_000 and 0.019 * 32_000 < accedant["taxe_fonciere"] < 0.023 * 32_000
+    # Une mensualité saisie est prise telle quelle ; un locataire ne paie ni l'un ni l'autre.
+    assert engine.logement(Persona(adultes=(Adulte(),), remboursement_mensuel=900), m)["remboursement_emprunt"] == 10_800
+    locataire = Persona(adultes=(Adulte(),), loyer_mensuel=700, code_commune="69123")
+    assert engine.logement(locataire, m) == {"loyer": 8400, "remboursement_emprunt": 0, "taxe_fonciere": 0}
+    with pytest.raises(ValueError, match="pas les deux"):
+        Persona(adultes=(Adulte(),), loyer_mensuel=700, code_commune="69123", accedant=True)
+
+
+def test_la_depense_hors_loyer_suit_le_revenu_et_le_taux_d_epargne():
+    m = {"revenu_disponible": 30_000, "impots_directs": -2000, "aides_logement": 0}
+    locataire = Persona(adultes=(Adulte(),), loyer_mensuel=700, code_commune="69123")
+    assert engine.hors_loyer(locataire, m) == pytest.approx((1 - taux_d_epargne(30_000)) * 30_000 - 8400)
+    # Le remboursement d'un accédant tient lieu de loyer, et la taxe foncière vient en déduction du revenu.
+    accedant = Persona(adultes=(Adulte(),), remboursement_mensuel=900)
+    taxe = engine.logement(accedant, m)["taxe_fonciere"]
+    assert engine.hors_loyer(accedant, m) == pytest.approx((1 - taux_d_epargne(30_000)) * (30_000 - taxe) - 10_800)
+    # Un loyer plus lourd que la dépense totale ne laisse rien.
+    assert engine.hors_loyer(Persona(adultes=(Adulte(),), loyer_mensuel=3000, code_commune="69123"), m) == 0
+
+
+def test_le_solde_du_bilan_est_l_epargne_des_menages_du_meme_niveau_de_vie():
+    avant = simuler(seul(2500), Scenario())["avant"]
+    taxe = avant["bilan"]["sorties"]["taxe_fonciere"]
+    assert taxe > 0  # sans loyer, le foyer est tenu pour propriétaire
+    # Aux arrondis de chaque poste près.
+    assert avant["bilan"]["solde"] == pytest.approx(taux_d_epargne(avant["revenu_disponible"]) * (avant["revenu_disponible"] - taxe), abs=20)
+
+
+def test_le_loyer_au_metre_carre_suit_la_zone_et_le_secteur():
+    irl = 145.93 / 130.56  # de 2020 à 2025
+    # Parc privé : 10,50 € en 2020, 16,11 € à Paris pour 8,59 € en moyenne en 2013. Une commune inconnue est en zone 2, comme pour OpenFisca.
+    assert loyer_au_m2(1, social=False) == pytest.approx(10.5 * 16.11 / 8.59 * irl)
+    assert loyer_au_m2(None, social=False) == loyer_au_m2(2, social=False) == pytest.approx(10.5 * 8.79 / 8.59 * irl)
+    # Zone 3 : entre les communes rurales et les petites agglomérations, selon leurs ménages locataires.
+    assert 6.5 * 4.98 / 5.51 * irl < loyer_au_m2(3, social=True) < 6.5 * 5.02 / 5.51 * irl
+    assert loyer_au_m2(3, social=False) < loyer_au_m2(2, social=False) < loyer_au_m2(1, social=False)
+
+
+def test_la_surface_moyenne_suit_le_type_de_menage_et_l_age():
+    assert [surface_moyenne(False, 1, 0, age) for age in (64, 65)] == [46.7, 58.8]
+    assert [surface_moyenne(False, 2, enfants, 40) for enfants in (0, 2, 3)] == [67.0, 87.1, 99.8]
+    assert (surface_moyenne(True, 1, 2, 70), surface_moyenne(True, 2, 0, 70)) == (73.7, 71.9)
+
+
+def test_le_loyer_d_un_locataire_est_le_sien_ou_a_defaut_estime():
+    def locataire(**logement):
+        return Persona(adultes=(Adulte(age=42, au_smic=True),), code_commune="31555", **logement)
+
+    assert Persona(adultes=(Adulte(),)).loyer == 0 and locataire(loyer_mensuel=616, locataire=True, surface_logement=30).loyer == 616
+    # Toulouse est en zone 2 : une personne seule de moins de 65 ans y loue 46,7 m² dans le parc privé, à défaut de dire sa surface.
+    assert locataire(locataire=True).zone == 2
+    assert locataire(locataire=True).loyer == round(46.7 * loyer_au_m2(2, social=False))
+    assert locataire(locataire=True, surface_logement=30, logement_social=True).loyer == round(30 * loyer_au_m2(2, social=True))
+    with pytest.raises(ValueError, match="commune"):
+        Persona(adultes=(Adulte(),), locataire=True)
+    # Le loyer estimé ouvre les aides au logement et entre dans le bilan, comme un loyer saisi.
+    r = simuler(locataire(locataire=True), Scenario())["avant"]
+    assert r["aides_logement"] > 0 and r["bilan"]["loyer"] == 12 * locataire(locataire=True).loyer

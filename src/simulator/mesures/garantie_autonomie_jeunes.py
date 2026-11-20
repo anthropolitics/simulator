@@ -1,7 +1,7 @@
 from openfisca_core.model_api import YEAR, Variable, max_
 from openfisca_france.entities import Famille
 
-from simulator.mesures import Mesure, ajouter_prestation
+from simulator.mesures import Cout, Mesure, ajouter_prestation
 
 SEUIL_PAUVRETE = 1337  # par mois, pour une personne seule
 AGE_MINIMUM, AGE_MAXIMUM = 18, 24
@@ -62,5 +62,10 @@ MESURE = Mesure(
     hypotheses=(
         "Le recours est supposé complet. Les effets sur l'emploi des jeunes, la poursuite d'études et la décohabitation, qui change le nombre de "
         "jeunes détachés du foyer de leurs parents, ne sont pas calculés, pas plus que le financement."
+    ),
+    cout=Cout(
+        9.5,
+        9.5,
+        "9,5 Md€ selon le candidat (« Comment nous allons remettre de l'ordre dans les comptes publics », La France insoumise, 14 octobre 2026, p. 8, phrase citée).",
     ),
 )

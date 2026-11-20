@@ -1,6 +1,6 @@
 from openfisca_france.entities import Famille
 
-from simulator.mesures import Mesure
+from simulator.mesures import Cout, Mesure
 from simulator.mesures.allocations_familiales_reservees_aux_francais import reserver
 
 DUREE = 5  # années travaillées en France, en équivalent temps plein
@@ -46,5 +46,10 @@ MESURE = Mesure(
     hypotheses=(
         "La source prévoit, si nécessaire, un référendum constitutionnel. Les aides locales et les prestations que ne calcule pas OpenFisca ne "
         "sont pas simulées, pas plus que les effets sur les comportements, dont les départs du territoire et l'activité."
+    ),
+    cout=Cout(
+        -6.1,
+        -6.1,
+        "Économie de 6,1 Md€ selon le contre-budget 2026 du groupe RN, 23 octobre 2025 : https://rassemblementnational.fr/documents/GRN-CONTRE-BUDGET-2026.pdf#page=7",
     ),
 )

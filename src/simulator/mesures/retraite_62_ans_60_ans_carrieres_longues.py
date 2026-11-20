@@ -1,6 +1,6 @@
 from dataclasses import replace
 
-from simulator.mesures import Mesure
+from simulator.mesures import Cout, Mesure
 from simulator.retraites import Parametres
 
 DUREE_CARRIERE_LONGUE = 160  # 40 annuités
@@ -58,5 +58,14 @@ MESURE = Mesure(
         "est la mesure minimum_vieillesse_1000. Les incitations à travailler au-delà de l'âge de la retraite pour les seniors qui ont leurs "
         "trimestres (suppression de leurs cotisations retraite et chômage) ne sont pas simulées. La carrière et le salaire sont tenus fixes ; ni "
         "l'emploi des seniors, ni le financement (9 milliards d'euros par an selon la candidate, 23 à 38 selon l'Institut Montaigne) ne sont calculés."
+    ),
+    cout=Cout(
+        9,
+        38.5,
+        "9 Md€ en année pleine selon la candidate (Public Sénat, 30 septembre 2026, https://www.publicsenat.fr/actualites/politique/"
+        "reculer-ou-avancer-lage-legal-avec-ou-sans-capitalisation-ce-que-proposent-les-principaux-candidats-a-lelection-presidentielle-sur-les-retraites) ; "
+        "23,5 à 38,5 Md€ par an, 26,5 au scénario central, selon l'Institut Montaigne, qui chiffrait en 2022 la même mesure avec la hausse du minimum "
+        "vieillesse (https://www.institutmontaigne.org/presidentielle-2022/marine-le-pen/"
+        "restaurer-la-retraite-a-60-ans-a-taux-plein-avec-40-annuites-et-revaloriser-le-minimum-vieillesse/) ; sources consultées le 19 novembre 2026.",
     ),
 )

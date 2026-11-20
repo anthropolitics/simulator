@@ -1,7 +1,7 @@
 from openfisca_core.model_api import YEAR, Variable
 from openfisca_france.entities import FoyerFiscal
 
-from simulator.mesures import Mesure, ajouter_impot
+from simulator.mesures import Cout, Mesure, ajouter_impot
 
 
 class assiette_isf_ifi(Variable):
@@ -61,5 +61,11 @@ MESURE = Mesure(
     hypotheses=(
         "Le calcul suppose un patrimoine déclaré et évalué sans changement de comportement : ni réallocation entre immobilier et placements "
         "financiers, ni départ, ni effet de l'impôt sur la valeur des actifs."
+    ),
+    cout=Cout(
+        -4,
+        -4,
+        "Recette de 4 Md€ pour l'« IFF à la place de la taxe sur les holdings et de l'IFI », selon le contre-budget 2026 du groupe RN, 23 octobre 2025 : "
+        "https://rassemblementnational.fr/documents/GRN-CONTRE-BUDGET-2026.pdf#page=7",
     ),
 )
