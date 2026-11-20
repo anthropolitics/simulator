@@ -1,6 +1,6 @@
 from openfisca_france.entities import Famille
 
-from simulator.mesures import Mesure
+from simulator.mesures import Cout, Mesure
 from simulator.mesures.allocations_familiales_reservees_aux_francais import reserver
 
 DUREE = 5  # années de résidence régulière
@@ -30,4 +30,13 @@ MESURE = Mesure(
     ),
     appliquer=lambda reforme: reserver(reforme, ("prestations_familiales", "minima_sociaux", "aides_logement"), un_parent_francais_ou_resident),
     hypotheses="Les aides locales et les prestations que ne calcule pas OpenFisca ne sont pas simulées, pas plus que les effets sur les comportements.",
+    cout=Cout(
+        -8,
+        -1.6,
+        "Économie de 8 Md€ par an selon le candidat (https://www.unenouvelleenergie.fr/questions/le-programme-de-david-lisnard-est-il-chiffre/) ; "
+        "2,1 Md€, de 1,6 à 2,7, selon l'Institut Montaigne, qui chiffrait en 2022 la même condition de cinq ans pour les seuls étrangers "
+        "extra-européens "
+        "(https://www.institutmontaigne.org/presidentielle-2022/valerie-pecresse/instaurer-un-minimum-de-5-ans-sur-le-territoire-pour-toucher-les-prestations-sociales-financees-en-dehors-des-cotisations-salariales). "
+        "Sources consultées le 20 novembre 2026.",
+    ),
 )

@@ -1,6 +1,6 @@
 from dataclasses import replace
 
-from simulator.mesures import Mesure
+from simulator.mesures import Cout, Mesure
 from simulator.retraites import Parametres
 
 # La loi d'avant la réforme de 2023. Âge légal de 62 ans à partir de la génération 1955 (L161-17-2 CSS, loi n° 2010-1330 du 9 novembre 2010).
@@ -60,5 +60,16 @@ MESURE = Mesure(
         "Glucksmann) ne sont pas simulés : les sources ne les chiffrent pas. L'indexation des retraites sur l'inflation (Nicolas Dupont-Aignan) "
         "ne change rien dans un calcul en euros constants de 2025. La carrière et le salaire sont tenus fixes ; ni l'emploi des seniors, ni le "
         "financement, ni le coût pour les comptes publics ne sont calculés."
+    ),
+    cout=Cout(
+        3.4,
+        16,
+        "Le coût grandit avec les générations concernées : 3,4 Md€ en 2025 et 16 Md€ en 2032 selon la Caisse nationale d'assurance vieillesse, "
+        "citée par l'amendement n° 616 du 25 novembre 2024 (https://www.assemblee-nationale.fr/dyn/17/amendements/0613/AN/616.pdf) ; 8,2 Md€ en "
+        "2027 selon l'Institut Montaigne "
+        "(https://www.institutmontaigne.org/legislatives-2024/nouveau-front-populaire/abroger-la-reforme-des-retraites-restaurer-la-retraite-a-60-ans-en-prenant-en-compte-le-rsa-en-portant-le-minimum-contributif-au-smic) "
+        "; 10,4 Md€ en 2035 selon la Cour des comptes, d'après son premier président (Public Sénat, 5 mars 2025, "
+        "https://www.publicsenat.fr/actualites/emploi/retraites-si-vous-abrogez-la-reforme-de-2023-cest-10-milliards-deuros-de-plus-quil-faut-trouver-souligne-pierre-moscovici). "
+        "Aucun des trois candidats ne chiffre la mesure seule. Sources consultées le 20 novembre 2026.",
     ),
 )

@@ -2,7 +2,7 @@ from openfisca_core.model_api import Variable, max_, min_
 from openfisca_core.taxscales import MarginalRateTaxScale
 from openfisca_france.model.prelevements_obligatoires.prelevements_sociaux.contributions_sociales.base import montant_csg_crds
 
-from simulator.mesures import Mesure
+from simulator.mesures import Cout, Mesure
 
 # Barème marginal par personne : seuil mensuel de l'assiette de la CSG, taux.
 BAREME = MarginalRateTaxScale(name="csg_14_tranches")
@@ -78,5 +78,13 @@ MESURE = Mesure(
     hypotheses=(
         "Le calcul ne tient pas compte des effets sur les salaires négociés, l'offre de travail ou la répartition des rémunérations entre "
         "salaire et autres formes de revenu. L'effet sur les recettes de la sécurité sociale n'est pas calculé."
+    ),
+    cout=Cout(
+        0,
+        39,
+        "La France insoumise la compte avec le barème de l'impôt sur le revenu (voir ir_14_tranches) et la disait en 2022 construite « pour être à "
+        "coût neutre » ; l'Institut Montaigne y voyait alors un « rendement diminué de 39 Md€ par an », d'après le barème du simulateur du candidat "
+        "(https://www.institutmontaigne.org/presidentielle-2022/jean-luc-melenchon/rendre-la-csg-progressive-sur-14-tranches). Sources consultées "
+        "le 20 novembre 2026.",
     ),
 )

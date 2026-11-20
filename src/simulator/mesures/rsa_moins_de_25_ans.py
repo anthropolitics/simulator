@@ -1,7 +1,7 @@
 from openfisca_core.model_api import Variable, not_
 from openfisca_france.entities import Famille
 
-from simulator.mesures import Mesure
+from simulator.mesures import Cout, Mesure
 
 AGE_MINIMUM = 18
 
@@ -44,5 +44,14 @@ MESURE = Mesure(
     hypotheses=(
         "Le recours au RSA est supposé complet. Les effets sur l'emploi et la poursuite d'études des jeunes, et le coût pour les départements, ne "
         "sont pas calculés."
+    ),
+    cout=Cout(
+        1.2,
+        6.6,
+        "De 1,2 à 3,8 Md€ selon le recours, pour les 18-25 ans non étudiants, d'après la DREES en 2012, et 6,6 Md€ au plus selon la direction "
+        "générale du Trésor, cités par le rapport Sirugue de 2016 (https://www.vie-publique.fr/files/rapport/pdf/164000239.pdf) ; 5,8 Md€ nets pour "
+        "1,4 million de jeunes selon la DREES en 2016, citée par le rapport n° 267 du Sénat de 2021 "
+        "(https://www.senat.fr/rap/l20-267/l20-2671.pdf). Montants de 2012 à 2016 ; le candidat ne chiffre pas la mesure. Sources consultées le 20 "
+        "novembre 2026.",
     ),
 )

@@ -1,7 +1,7 @@
 from openfisca_core.model_api import Variable
 from openfisca_france.entities import Famille
 
-from simulator.mesures import Mesure
+from simulator.mesures import Cout, Mesure
 
 # Les montants bruts : les annuler annule aussi les montants nets de CRDS et leur prise en compte dans les ressources du RSA et de la prime d'activité.
 PRESTATIONS_FAMILIALES = ("af", "cf", "ars", "asf", "aeeh", "paje_base", "paje_naissance", "paje_adoption", "paje_cmg")
@@ -51,5 +51,14 @@ MESURE = Mesure(
         "des ménages étrangers restent soumis aux seules conditions de la loi actuelle. La source prévoit, si nécessaire, un référendum "
         "constitutionnel. L'usage des économies, que le livret destine notamment à « la revalorisation des aides dont bénéficient les "
         "nationaux », n'est pas simulé, pas plus que les effets sur les comportements."
+    ),
+    cout=Cout(
+        -5.9,
+        -2.6,
+        "Économie de 5,9 Md€ en 2031 selon le dossier de presse de la candidate du 6 octobre 2026, rapporté par l'Institut de l'Entreprise "
+        "(https://www.institut-entreprise.fr/wp-content/uploads/2026/10/Analyse-primaire-contre-budget-RN-Note-de-contexte-IDEP.pdf, p. 6) ; 3,8 "
+        "Md€, de 2,6 à 3,9, selon l'Institut Montaigne en 2024 "
+        "(https://www.institutmontaigne.org/legislatives-2024/rassemblement-national/accorder-les-prestations-familiales-aux-seuls-foyers-dont-au-moins-un-des-parents-est-francais). "
+        "Sources consultées le 20 novembre 2026.",
     ),
 )

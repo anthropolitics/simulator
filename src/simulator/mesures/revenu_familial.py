@@ -1,7 +1,7 @@
 from openfisca_core.model_api import MONTH, Variable
 from openfisca_france.entities import Famille
 
-from simulator.mesures import Mesure, ajouter_prestation
+from simulator.mesures import Cout, Mesure, ajouter_prestation
 
 MONTANT_PAR_ENFANT = 240
 AGE_LIMITE = 18
@@ -77,5 +77,13 @@ MESURE = Mesure(
         "La suspension temporaire par décision de justice en cas de défaillance éducative n'est pas simulée : le ménage type ne décrit aucune "
         "décision de justice. Les effets sur la natalité, l'activité des parents et le recours aux prestations ne sont pas simulés, pas plus que le "
         "financement et les économies de gestion annoncés."
+    ),
+    cout=Cout(
+        -0.7,
+        -0.7,
+        "Selon le candidat, les dispositifs supprimés « représentent 41 milliards d'euros, pour un coût du Revenu familial de 40,3 milliards hors "
+        "bonification du troisième enfant », que le simulateur ne compte pas non plus "
+        "(https://www.avecretailleau.fr/projet/mesure/verser-240-euros-par-mois-par-enfant-mineur) ; aucun chiffrage indépendant. Sources "
+        "consultées le 20 novembre 2026.",
     ),
 )

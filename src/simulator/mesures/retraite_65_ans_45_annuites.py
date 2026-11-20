@@ -1,6 +1,6 @@
 from dataclasses import replace
 
-from simulator.mesures import Mesure
+from simulator.mesures import Cout, Mesure
 from simulator.mesures.retraite_65_ans import AGE_LEGAL
 from simulator.retraites import Parametres
 
@@ -42,5 +42,15 @@ MESURE = Mesure(
         "pas simulé, ni la prise en compte de la pénibilité, que le candidat annonce sans la détailler, ni les départs anticipés pour handicap, incapacité "
         "ou invalidité, que le moteur ne calcule pas et que le candidat garde à 55, 60 et 62 ans. Le calcul tient la carrière et le salaire fixes : ni "
         "l'emploi des seniors, ni le chômage, l'invalidité ou les minima sociaux avant le départ, ni les économies pour les comptes publics ne sont calculés."
+    ),
+    cout=Cout(
+        -30,
+        -8.4,
+        "Économie de 30 Md€ en année pleine selon le candidat (Public Sénat, 30 septembre 2026, "
+        "https://www.publicsenat.fr/actualites/politique/reculer-ou-avancer-lage-legal-avec-ou-sans-capitalisation-ce-que-proposent-les-principaux-candidats-a-lelection-presidentielle-sur-les-retraites). "
+        "Pour l'âge à 65 ans seul, en 2035 : 8,4 Md€ pour le système de retraites, 17,7 Md€ pour l'ensemble des finances publiques, selon la Cour "
+        "des comptes en février 2025 "
+        "(https://www.ccomptes.fr/sites/default/files/2025-03/20250220-Situation-financiere-et-perspectives-du-systeme-de%20retraites.pdf, p. 11 et "
+        "73), qui ne chiffre pas la durée de 45 ans. Sources consultées le 20 novembre 2026.",
     ),
 )

@@ -60,8 +60,12 @@ MESURE = Mesure(
     appliquer=appliquer,
     hypotheses=HYPOTHESES,
     cout=Cout(
-        -15,
-        -15,
-        "15 Md€ de recettes selon le candidat (« Comment nous allons remettre de l'ordre dans les comptes publics », La France insoumise, 14 octobre 2026, phrase citée) ; aucun chiffrage indépendant n'est repris.",
+        -25,
+        -5,
+        "15 Md€ de recettes selon le candidat (phrase citée). 15 à 25 Md€ de recettes selon Gabriel Zucman, cité par le rapport n° 689 du Sénat du "
+        "4 juin 2025, p. 41 (https://www.senat.fr/rap/l24-689/l24-6891.pdf) ; 5 Md€ selon Philippe Aghion et Xavier Jaravel, cités par la note de "
+        "France Positive « Présidentielle 2027 : les trajectoires budgétaires des candidats » du 28 septembre 2026 "
+        "(https://france-positive-backend.vercel.app/api/media/file/1ba0bafa-bba6-4f6f-9d36-9178a08235a0-synthese-fp-trajectoires-budgetaires.pdf). "
+        "Sources consultées le 20 novembre 2026.",
     ),
 )

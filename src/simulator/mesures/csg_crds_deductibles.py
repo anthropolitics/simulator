@@ -1,6 +1,6 @@
 from openfisca_core.model_api import ADD, Variable
 
-from simulator.mesures import Mesure
+from simulator.mesures import Cout, Mesure
 
 # Revenu catégoriel de l'impôt sur le revenu, et revenus dont il retire la CSG non déductible et la CRDS.
 CATEGORIES = {"revenu_assimile_salaire": ("salaire", "chomage"), "revenu_assimile_pension": ("retraite",)}
@@ -41,4 +41,12 @@ MESURE = Mesure(
     appliquer=appliquer,
     a_confirmer=True,  # la tribune n'est connue que par un résumé
     hypotheses="Le financement de la baisse d'impôt n'est pas calculé, pas plus que ses effets sur l'activité.",
+    cout=Cout(
+        2,
+        2,
+        "Au moins 2 Md€ par an : c'est ce que coûterait la déduction de la CSG des seuls revenus d'activité selon l'iFRAP en mai 2023 "
+        "(https://www.ifrap.org/budget-et-fiscalite/pourquoi-il-faut-rendre-la-csg-totalement-deductible-de-lir-sur-les-revenus-dactivite) ; la "
+        "mesure y ajoute la CRDS, les pensions et les allocations de chômage. Le candidat ne la chiffre pas. Sources consultées le 20 novembre "
+        "2026.",
+    ),
 )

@@ -1,4 +1,4 @@
-from simulator.mesures import Mesure
+from simulator.mesures import Cout, Mesure
 
 
 def appliquer(reforme):
@@ -27,4 +27,10 @@ MESURE = Mesure(
     appliquer=appliquer,
     a_confirmer=True,  # mesure de la campagne de 2022, connue par une source secondaire ; aucun programme 2027
     hypotheses="Le patrimoine est tenu fixe : ni réallocation vers la résidence principale, ni effet de la mesure sur les prix immobiliers.",
+    cout=Cout(
+        0.27,
+        0.7,
+        "0,66 Md€ de recettes en moins, de 0,27 à 0,70, selon l'Institut Montaigne en 2022, pour un impôt qui rapportait alors 1,56 Md€ ; le "
+        "candidat ne chiffre pas la mesure (page citée en source). Sources consultées le 20 novembre 2026.",
+    ),
 )

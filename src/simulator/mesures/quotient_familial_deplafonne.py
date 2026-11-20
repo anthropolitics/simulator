@@ -1,4 +1,4 @@
-from simulator.mesures import Mesure
+from simulator.mesures import Cout, Mesure
 
 SANS_PLAFOND = 1e9  # un plafond qu'aucun avantage n'atteint ; l'infini donnerait 0 × ∞ pour un foyer sans demi-part
 # Demi-part d'enfant à charge, première part d'un parent isolé (case T), demi-part d'une personne seule ayant eu des enfants à charge (case L).
@@ -40,4 +40,11 @@ MESURE = Mesure(
     appliquer=appliquer,
     a_confirmer=True,  # page du parti non datée ; la tribune de la campagne n'est connue que par un résumé
     hypotheses="Les effets sur la natalité et l'activité des parents ne sont pas simulés, pas plus que le financement.",
+    cout=Cout(
+        4.9,
+        4.9,
+        "« Un déplafonnement représenterait une perte de recettes estimée à 4,9 Md€ pour l'État », selon la Cour des comptes en octobre 2023, sur "
+        "les revenus de 2020 (https://www.ccomptes.fr/fr/documents/66939) ; le candidat ne chiffre pas la mesure. Sources consultées le 20 novembre "
+        "2026.",
+    ),
 )

@@ -49,7 +49,10 @@ MESURE = Mesure(
     ),
     cout=Cout(
         -6.1,
-        -6.1,
-        "Économie de 6,1 Md€ selon le contre-budget 2026 du groupe RN, 23 octobre 2025 : https://rassemblementnational.fr/documents/GRN-CONTRE-BUDGET-2026.pdf#page=7",
+        -0.6,
+        "Économie de 6,1 Md€ selon le contre-budget 2026 du groupe RN "
+        "(https://rassemblementnational.fr/documents/GRN-CONTRE-BUDGET-2026.pdf#page=7) ; 2,6 Md€, de 0,6 à 3, selon l'Institut Montaigne en 2024 "
+        "(https://www.institutmontaigne.org/legislatives-2024/rassemblement-national/reserver-le-benefice-du-rsa-et-des-prestations-de-solidarites-aux-etrangers-ayant-au-moins-5-ans-dequivalent-temps-plein-travaille-en-france). "
+        "Sources consultées le 20 novembre 2026.",
     ),
 )

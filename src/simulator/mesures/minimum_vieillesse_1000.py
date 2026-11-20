@@ -1,4 +1,4 @@
-from simulator.mesures import Mesure
+from simulator.mesures import Cout, Mesure
 
 MONTANT_ANNUEL = 12 * 1000
 
@@ -29,4 +29,12 @@ MESURE = Mesure(
     appliquer=appliquer,
     a_confirmer=True,  # document de la campagne 2022, que seule une source de 2026 rattache au programme 2027
     hypotheses="Aucun effet de comportement : la mesure ne change aucun montant de la loi 2025.",
+    cout=Cout(
+        0,
+        0,
+        "Le minimum vieillesse d'une personne seule dépasse déjà 1 000 € par mois en 2025 : la mesure ne coûte plus rien. L'Institut Montaigne la "
+        "chiffrait à 0,53 Md€ par an en 2022, quand il valait 916,78 € "
+        "(https://www.institutmontaigne.org/presidentielle-2022/marine-le-pen/restaurer-la-retraite-a-60-ans-a-taux-plein-avec-40-annuites-et-revaloriser-le-minimum-vieillesse/). "
+        "Sources consultées le 20 novembre 2026.",
+    ),
 )

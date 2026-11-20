@@ -1,6 +1,6 @@
 from openfisca_core.model_api import Variable
 
-from simulator.mesures import Mesure
+from simulator.mesures import Cout, Mesure
 
 TAUX = 0.025
 SEUIL_NET_MENSUEL = 2000
@@ -54,5 +54,12 @@ MESURE = Mesure(
         "L'effet de seuil pourrait conduire des salariés juste au-dessus de 2 000 € net à négocier un salaire plus bas : ce comportement n'est "
         "pas simulé, pas plus que le financement annoncé (suppression des prestations non contributives aux étrangers hors Union européenne) "
         "ni les effets sur l'emploi et les salaires négociés."
+    ),
+    cout=Cout(
+        9,
+        17.5,
+        "Après le surcroît d'impôt sur le revenu que la baisse de CSG entraîne : 9 Md€ selon l'équipe du candidat, avec un lissage par tranches "
+        "(10,8 Md€ avant ce retour) ; 15,5 Md€, de 13,5 à 17,5, selon l'Institut Montaigne en 2022 (18,5 Md€ avant ce retour, de 16,5 à 20,5), sur "
+        "tous les revenus d'activité et non les seuls salaires (page citée en source). Sources consultées le 20 novembre 2026.",
     ),
 )

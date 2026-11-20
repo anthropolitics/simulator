@@ -1,4 +1,4 @@
-from simulator.mesures import Mesure
+from simulator.mesures import Cout, Mesure
 from simulator.mesures.taxe_zucman_melenchon import HYPOTHESES, TRADUCTION, appliquer
 
 MESURE = Mesure(
@@ -15,4 +15,14 @@ MESURE = Mesure(
     appliquer=appliquer,
     a_confirmer=True,
     hypotheses=HYPOTHESES,
+    cout=Cout(
+        -25,
+        -5,
+        "15 à 25 Md€ de recettes selon le contre-budget des Écologistes du 4 septembre 2025, repris par la note de France Positive citée plus loin "
+        "; le programme de 2027 ne donne pas de rendement. 15 à 25 Md€ de recettes selon Gabriel Zucman, cité par le rapport n° 689 du Sénat du 4 "
+        "juin 2025, p. 41 (https://www.senat.fr/rap/l24-689/l24-6891.pdf) ; 5 Md€ selon Philippe Aghion et Xavier Jaravel, cités par la note de "
+        "France Positive « Présidentielle 2027 : les trajectoires budgétaires des candidats » du 28 septembre 2026 "
+        "(https://france-positive-backend.vercel.app/api/media/file/1ba0bafa-bba6-4f6f-9d36-9178a08235a0-synthese-fp-trajectoires-budgetaires.pdf). "
+        "Sources consultées le 20 novembre 2026.",
+    ),
 )

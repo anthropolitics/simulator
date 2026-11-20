@@ -1,4 +1,4 @@
-from simulator.mesures import Mesure
+from simulator.mesures import Cout, Mesure
 from simulator.mesures.plafond_quotient_familial_3000 import plafond_a
 
 PLAFOND = 2 * 1807  # le double du plafond général par demi-part de la loi 2025
@@ -24,4 +24,10 @@ MESURE = Mesure(
     appliquer=plafond_a(PLAFOND),
     a_confirmer=True,  # mesure de la campagne de 2022, connue par une source secondaire ; aucun programme 2027
     hypotheses="Les effets sur la natalité et sur l'activité des parents ne sont pas calculés, pas plus que le financement de la mesure.",
+    cout=Cout(
+        3.2,
+        3.5,
+        "3,3 Md€, de 3,2 à 3,5, selon l'Institut Montaigne en 2022, chiffrage que l'équipe du candidat a dit partager ; il porte sur le plafond de "
+        "2022, de 1 570 à 3 140 € par demi-part (page citée en source). Sources consultées le 20 novembre 2026.",
+    ),
 )
