@@ -46,7 +46,7 @@ Pour situer ces montants, chaque résultat donne aussi le compte du foyer avec l
 
 - **Ce qu'il verse** : ses cotisations salariales, sa CSG, ses impôts directs et sa TVA. Ce total est réparti comme la dépense publique de 2024 (Insee) : sur 1 000 € versés, 415 € vont à la protection sociale (retraites, chômage, famille, solidarité), 156 € à la santé, 89 € à l'enseignement, 36 € aux intérêts de la dette, 32 € à la défense, et ainsi de suite.
 - **Ce qu'il reçoit en argent** : ses pensions de retraite et ses prestations sociales.
-- **Ce qu'il reçoit en nature** : l'école de ses enfants, à la dépense publique moyenne par élève du niveau de leur âge, de la maternelle à l'enseignement supérieur (DEPP), et la santé de chacun, à la dépense publique moyenne par habitant (Insee) pondérée selon son âge comme les soins remboursés par l'assurance maladie (DREES) : un enfant compte pour 0,4 fois la moyenne, une personne de plus de 80 ans pour 3,1 fois.
+- **Ce qu'il reçoit en nature** : l'école de ses enfants, à la dépense moyenne par élève du niveau de leur âge, de la maternelle à l'enseignement supérieur, pour la part que finance le public à ce niveau (DEPP : 94 % dans le premier degré, 89 % dans le second, 68 % dans le supérieur), et la santé de chacun, à la dépense publique moyenne par habitant (Insee) pondérée selon son âge comme les soins remboursés par l'assurance maladie (DREES) : un enfant compte pour 0,4 fois la moyenne, une personne de plus de 80 ans pour 3,1 fois.
 
 C'est une convention de lecture : un euro versé finance chaque fonction selon son poids, quel que soit l'impôt. Les cotisations des employeurs et les taxes que le moteur ne calcule pas (carburants, tabac, taxe foncière) ne sont pas comptées dans ce qu'il verse.
 

@@ -277,15 +277,22 @@ SMIC_ACTUEL = smic_annuel(LOI_ACTUELLE)
 # Ce que les administrations publiques dépensent pour le foyer sans le lui verser. École : dépense moyenne par élève en 2024 selon l'âge de
 # l'enfant, donc son niveau : préélémentaire de 3 à 5 ans, élémentaire de 6 à 10 ans, collège de 11 à 14 ans, lycée général et
 # technologique de 15 à 17 ans (le lycée professionnel coûte 14 700 €), enseignement supérieur de 18 à 25 ans, un enfant à charge de cet
-# âge étant pris pour étudiant ; pour la part que financent l'État (55,2 %), les collectivités (23,0 %) et les autres administrations
-# (3,8 %) (DEPP, reprise par l'Insee, « Dépenses d'éducation », figures 1 et 3, https://www.insee.fr/fr/statistiques/8612572).
+# âge étant pris pour étudiant (DEPP, reprise par l'Insee, « Dépenses d'éducation », figure 3, https://www.insee.fr/fr/statistiques/8612572) ;
+# et la part qu'en financent l'État, les collectivités et les autres administrations : 94 % dans le premier degré, 89 % dans le second,
+# 68 % dans le supérieur (DEPP, « L'état de l'École 2025 », figure 9.3,
+# https://www.education.gouv.fr/sites/default/files/document/l-tat-de-l-cole-2025-478952.pdf, consulté le 20 novembre 2026).
 # Santé : la dépense publique de santé de 2024 par habitant, pour 68,6 millions d'habitants (Insee Première n° 2033,
 # https://www.insee.fr/fr/statistiques/8327319), répartie selon l'âge comme les soins remboursés par l'assurance maladie en 2023 : montant
 # moyen par personne de 0 à 10 ans, puis par tranche de dix ans jusqu'à plus de 80 ans, pour 2 496 € en moyenne (DREES, « Dépenses de santé
 # et restes à charge », https://data.drees.solidarites-sante.gouv.fr/explore/dataset/depenses-de-sante-et-restes-a-charge/).
 # Sources consultées le 19 novembre 2026.
-DEPENSE_PAR_ELEVE = {range(3, 6): 8990, range(6, 11): 9130, range(11, 15): 10_450, range(15, 18): 13_020, range(18, 26): 13_300}
-PART_PUBLIQUE_DE_L_ECOLE = 0.82
+DEPENSE_PUBLIQUE_PAR_ELEVE = {
+    range(3, 6): 0.94 * 8990,
+    range(6, 11): 0.94 * 9130,
+    range(11, 15): 0.89 * 10_450,
+    range(15, 18): 0.89 * 13_020,
+    range(18, 26): 0.68 * 13_300,
+}
 SANTE_PAR_HABITANT = DEPENSES_PUBLIQUES["sante"] * 1e9 / 68.6e6
 REMBOURSE_SELON_L_AGE, REMBOURSE_EN_MOYENNE = (925, 887, 1134, 1477, 1713, 2557, 3822, 5587, 7858), 2496
 
@@ -306,9 +313,8 @@ def finances_publiques(m: dict[str, int], persona: Persona) -> dict:
     # shortcut: un euro versé finance chaque fonction selon son poids dans la dépense de 2024, quel que soit l'impôt ; affecter chaque
     # prélèvement à sa caisse (cotisations vieillesse aux retraites) si le site doit dire où va tel impôt.
     total = sum(DEPENSES_PUBLIQUES.values())
-    # shortcut: la même part publique à tous les niveaux d'école ; prendre celle de chaque niveau si la DEPP la publie.
     en_nature = {
-        "enseignement": round(PART_PUBLIQUE_DE_L_ECOLE * sum(cout for ages, cout in DEPENSE_PAR_ELEVE.items() for age in persona.enfants if age in ages)),
+        "enseignement": round(sum(cout for ages, cout in DEPENSE_PUBLIQUE_PAR_ELEVE.items() for age in persona.enfants if age in ages)),
         "sante": round(sum(sante(age) for age in (*(a.age for a in persona.adultes), *persona.enfants))),
     }
     return {

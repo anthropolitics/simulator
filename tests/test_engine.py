@@ -329,8 +329,8 @@ def test_le_foyer_recoit_en_nature_l_ecole_de_ses_enfants_et_la_sante_selon_leur
     famille = Persona(adultes=(Adulte(age=45), Adulte(age=82)), enfants=(2, 5, 8, 12, 16, 19))
     m = dict.fromkeys(("salaire_brut", "retraite_brute", "salaire_net", "retraite_nette", "impots_directs", "tva", "prestations_sociales"), 0)
     en_nature = engine.finances_publiques(m, famille)["en_nature"]
-    # Pas d'école à 2 ans ; puis maternelle, élémentaire, collège, lycée, enseignement supérieur : la part publique de chaque dépense par élève.
-    assert en_nature["enseignement"] == round(0.82 * (8990 + 9130 + 10_450 + 13_020 + 13_300))
+    # Pas d'école à 2 ans ; puis maternelle, élémentaire, collège, lycée, supérieur : la part publique de la dépense par élève de chaque niveau.
+    assert en_nature["enseignement"] == round(0.94 * (8990 + 9130) + 0.89 * (10_450 + 13_020) + 0.68 * 13_300)
     # La dépense publique de santé par habitant, pondérée selon l'âge : 41-50 ans, plus de 80 ans, trois enfants de 0 à 10 ans, trois de 11 à 20 ans.
     assert en_nature["sante"] == round(261e9 / 68.6e6 * (1713 + 7858 + 3 * 925 + 3 * 887) / 2496)
     assert engine.sante(80) < engine.sante(81) and engine.sante(10) > engine.sante(11)
