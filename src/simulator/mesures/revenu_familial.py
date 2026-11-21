@@ -79,11 +79,13 @@ MESURE = Mesure(
         "financement et les économies de gestion annoncés."
     ),
     cout=Cout(
-        -0.7,
-        -0.7,
+        0,
+        0,
         "Selon le candidat, les dispositifs supprimés « représentent 41 milliards d'euros, pour un coût du Revenu familial de 40,3 milliards hors "
         "bonification du troisième enfant », que le simulateur ne compte pas non plus "
         "(https://www.avecretailleau.fr/projet/mesure/verser-240-euros-par-mois-par-enfant-mineur) ; aucun chiffrage indépendant. Sources "
-        "consultées le 20 novembre 2026.",
+        "consultées le 20 novembre 2026."
+        " Sans évaluation fiable, le simulateur ne retient aucune économie ; il garde l'annonce du candidat.",
+        annonce=-0.7,
     ),
 )

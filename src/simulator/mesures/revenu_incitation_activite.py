@@ -60,10 +60,12 @@ MESURE = Mesure(
         "plafonnement des aides par le compte social unique, autre proposition du même livret, n'est pas inclus. Le financement n'est pas calculé."
     ),
     cout=Cout(
-        -2,
-        -2,
+        0,
+        0,
         "« Un gain annuel de 2 milliards d'euros, obtenu par la fusion de trois prestations », selon le candidat "
         "(https://www.avecretailleau.fr/projet/mesure/faire-gagner-plus-a-ceux-qui-reprennent-un-emploi) ; aucun chiffrage indépendant. Sources "
-        "consultées le 20 novembre 2026.",
+        "consultées le 20 novembre 2026."
+        " Sans évaluation fiable, le simulateur ne retient aucune économie ; il garde l'annonce du candidat.",
+        annonce=-2,
     ),
 )

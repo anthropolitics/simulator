@@ -63,9 +63,11 @@ MESURE = Mesure(
         "financiers, ni départ, ni effet de l'impôt sur la valeur des actifs."
     ),
     cout=Cout(
-        -4,
-        -4,
+        0,
+        0,
         "Recette de 4 Md€ pour l'« IFF à la place de la taxe sur les holdings et de l'IFI », selon le contre-budget 2026 du groupe RN, 23 octobre 2025 : "
-        "https://rassemblementnational.fr/documents/GRN-CONTRE-BUDGET-2026.pdf#page=7",
+        "https://rassemblementnational.fr/documents/GRN-CONTRE-BUDGET-2026.pdf#page=7"
+        " Sans évaluation fiable, le simulateur ne retient aucune recette ; il garde l'annonce du groupe RN.",
+        annonce=-4,
     ),
 )

@@ -57,10 +57,12 @@ MESURE = Mesure(
         "effets sur l'emploi et le recours aux aides ne sont pas calculés."
     ),
     cout=Cout(
-        -10,
-        -10,
+        0,
+        0,
         "« Un gain annuel estimé à 10 milliards d'euros », selon le candidat, qui vient « d'abord du recensement lui-même [...], ensuite du "
         "plafonnement » : le chiffre mêle lutte contre la fraude et plafond (page citée en source). Aucun chiffrage indépendant de la mesure telle "
-        "qu'elle est décrite. Sources consultées le 20 novembre 2026.",
+        "qu'elle est décrite. Sources consultées le 20 novembre 2026."
+        " Sans évaluation fiable, le simulateur ne retient aucune recette ; il garde l'annonce du candidat.",
+        annonce=-10,
     ),
 )
