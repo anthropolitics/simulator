@@ -53,12 +53,14 @@ MESURE = Mesure(
         "nationaux », n'est pas simulé, pas plus que les effets sur les comportements."
     ),
     cout=Cout(
-        -5.9,
+        -3.9,
         -2.6,
         "Économie de 5,9 Md€ en 2031 selon le dossier de presse de la candidate du 6 octobre 2026, rapporté par l'Institut de l'Entreprise "
         "(https://www.institut-entreprise.fr/wp-content/uploads/2026/10/Analyse-primaire-contre-budget-RN-Note-de-contexte-IDEP.pdf, p. 6) ; 3,8 "
         "Md€, de 2,6 à 3,9, selon l'Institut Montaigne en 2024 "
         "(https://www.institutmontaigne.org/legislatives-2024/rassemblement-national/accorder-les-prestations-familiales-aux-seuls-foyers-dont-au-moins-un-des-parents-est-francais). "
-        "Sources consultées le 20 novembre 2026.",
+        "Sources consultées le 20 novembre 2026."
+        " Le simulateur retient au plus les 3,9 Md€ que l'Institut Montaigne accorde à la mesure, pas les 5,9 Md€ de la candidate.",
+        annonce=-5.9,
     ),
 )

@@ -60,12 +60,14 @@ MESURE = Mesure(
     appliquer=appliquer,
     hypotheses=HYPOTHESES,
     cout=Cout(
-        -25,
+        -15,
         -5,
         "15 Md€ de recettes selon le candidat (phrase citée). 15 à 25 Md€ de recettes selon Gabriel Zucman, cité par le rapport n° 689 du Sénat du "
         "4 juin 2025, p. 41 (https://www.senat.fr/rap/l24-689/l24-6891.pdf) ; 5 Md€ selon Philippe Aghion et Xavier Jaravel, cités par la note de "
         "France Positive « Présidentielle 2027 : les trajectoires budgétaires des candidats » du 28 septembre 2026 "
         "(https://france-positive-backend.vercel.app/api/media/file/1ba0bafa-bba6-4f6f-9d36-9178a08235a0-synthese-fp-trajectoires-budgetaires.pdf). "
-        "Sources consultées le 20 novembre 2026.",
+        "Sources consultées le 20 novembre 2026."
+        " La recette retenue ne dépasse pas les 15 Md€ qu'annonce le candidat ; Gabriel Zucman l'estime jusqu'à 25 Md€.",
+        annonce=-15,
     ),
 )

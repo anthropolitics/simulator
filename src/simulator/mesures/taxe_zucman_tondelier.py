@@ -23,6 +23,8 @@ MESURE = Mesure(
         "juin 2025, p. 41 (https://www.senat.fr/rap/l24-689/l24-6891.pdf) ; 5 Md€ selon Philippe Aghion et Xavier Jaravel, cités par la note de "
         "France Positive « Présidentielle 2027 : les trajectoires budgétaires des candidats » du 28 septembre 2026 "
         "(https://france-positive-backend.vercel.app/api/media/file/1ba0bafa-bba6-4f6f-9d36-9178a08235a0-synthese-fp-trajectoires-budgetaires.pdf). "
-        "Sources consultées le 20 novembre 2026.",
+        "Sources consultées le 20 novembre 2026."
+        " La recette retenue va jusqu'aux 25 Md€ qu'annonce le contre-budget des Écologistes, que Gabriel Zucman chiffre aussi.",
+        annonce=-25,
     ),
 )

@@ -136,16 +136,25 @@ class Fourchette(BaseModel):
     haut: float = Field(description="Selon le chiffrage le plus haut.")
 
 
+class Plafonnee(BaseModel):
+    mesure: str
+    annonce: float = Field(description="Ce que le candidat annonce, en milliards d'euros par an (négatif : une recette).")
+    retenu: Fourchette = Field(description="Ce que le simulateur retient : au plus le rendement qu'une source fiable accorde, zéro sans aucune.")
+
+
 class Budget(BaseModel):
     cout: Fourchette = Field(
-        description="Ce que les mesures chiffrées du scénario coûtent chaque année aux finances publiques, en milliards d'euros ; négatif quand "
-        "elles rapportent. Sans financement, c'est ce dont le déficit public se creuse ou se réduit."
+        description="Solde des mesures chiffrées du scénario pour les finances publiques chaque année, en milliards d'euros : ce qu'elles coûtent, "
+        "moins ce que rapportent les recettes et économies du programme ; négatif quand le programme rapporte plus qu'il ne coûte."
     )
+    depenses: Fourchette = Field(description="Ce que coûtent les mesures qui coûtent, en milliards d'euros par an.")
+    recettes: Fourchette = Field(description="Ce que rapportent les recettes et économies du programme (négatif), en milliards d'euros par an.")
     non_chiffrees: list[str] = Field(description="Mesures du scénario qu'aucune source ne chiffre encore : leur coût manque au total.")
-    contreparties: dict[str, Fourchette] = Field(
-        description="Pour la TVA, la CSG et l'impôt sur le revenu : ce que le foyer paierait de plus par an, en euros (négatif), si ce coût "
-        "était financé par une hausse proportionnelle de cet impôt seul ; positif, ce qu'il gagnerait si un scénario qui rapporte lui était "
-        "rendu par cet impôt. Ce sont des conventions du simulateur, pas le financement d'un candidat, dont les mesures font partie du scénario."
+    plafonnees: list[Plafonnee] = Field(description="Recettes annoncées que le simulateur réduit faute d'évaluation fiable à la hauteur de l'annonce.")
+    dette: Fourchette = Field(description="Dette ajoutée à l'horizon de la simulation, en milliards d'euros : un solde par année écoulée, aujourd'hui compris.")
+    interets: Fourchette = Field(
+        description="Ce que le foyer paie de plus par an, en euros, en intérêts de cette dette (au taux de l'emprunt d'État à 10 ans), dans la "
+        "part qu'il prend à toute la dépense publique ; négatif quand le programme rapporte plus qu'il ne coûte."
     )
 
 
@@ -181,7 +190,9 @@ class Resultat(BaseModel):
     apres: Montants = Field(description="Avec le scénario, en euros par an.")
     ecart_revenu_disponible: int
     ecart_pouvoir_achat: int = Field(description="Écart du revenu disponible et de la TVA payée sur la consommation.")
-    budget: Budget | None = Field(description="Coût du scénario et contreparties pour le foyer ; vide si aucune mesure du scénario n'est chiffrée.")
+    budget: Budget | None = Field(
+        description="Solde du scénario pour les finances publiques et ce que sa dette coûte au foyer ; vide si aucune mesure n'est chiffrée."
+    )
     versions: dict[str, str] = Field(description="Versions du code qui a produit le résultat, pour le rejouer.")
 
 

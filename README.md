@@ -30,15 +30,15 @@ Le calcul sépare trois types d'effets :
 | Budgétaires | Coût ou recette d'une mesure pour les finances publiques | Moyen : les chiffrages divergent | Une fourchette, du chiffrage le plus bas au plus haut, chacun avec sa source |
 | Comportement et macro | Emploi, prix, croissance | Faible | Une fourchette sourcée, seulement quand elle change la conclusion |
 
-## Financement et contreparties
+## Financement et dette
 
 Aucune mesure n'est gratuite, et aucune économie n'est sans effet. Chaque résultat porte donc, à côté de l'effet direct sur le foyer, le budget du scénario.
 
 1. **Le coût.** Chaque mesure du catalogue porte ce qu'elle coûte ou rapporte par an aux finances publiques, en milliards d'euros, quand une source le chiffre : le candidat, un institut, une administration. Quand les chiffrages divergent, le coût est une fourchette. Le moteur ne recalcule pas ce coût : il faudrait les données fiscales de toute la population, qui ne sont pas publiques. Une mesure sans chiffrage est signalée « non chiffrée » et manque au total.
-2. **Le financement du candidat.** Un impôt, une baisse de prestation ou une économie que le candidat annonce est une mesure du catalogue comme une autre : son effet sur le foyer entre dans le calcul, sa recette vient en déduction du coût. Un financement sans effet calculable sur un foyer (économies de fonctionnement, impôt sur les entreprises, lutte contre la fraude) compte pour sa recette seulement.
-3. **Ce qui reste.** Le solde, coût moins recettes, est ce dont le déficit public se creuse ou se réduit. Pour dire ce qu'il pèse sur le foyer, le moteur le traduit en euros par an selon trois conventions, toujours données ensemble : s'il était financé par la seule TVA, par la seule CSG ou par le seul impôt sur le revenu, chaque taux relevé dans la même proportion. Un scénario qui rapporte plus qu'il ne coûte se lit dans l'autre sens : ce que le foyer gagnerait si l'excédent lui était rendu par cet impôt.
+2. **Le financement du candidat.** Un impôt, une baisse de prestation ou une économie que le candidat annonce est une mesure du catalogue comme une autre : son effet sur le foyer entre dans le calcul, sa recette vient en déduction du coût. Un financement sans effet calculable sur un foyer (économies de fonctionnement, impôt sur les entreprises, lutte contre la fraude) compte pour sa recette seulement. Une recette annoncée ne compte qu'au rendement que lui accorde une source fiable (Cour des comptes, Conseil des prélèvements obligatoires, administration, institut qui publie sa méthode), sans dépasser ce qu'annonce le candidat ; sans aucune évaluation fiable, elle compte pour zéro, et le résultat dit ce que le candidat annonçait.
+3. **Ce qui reste.** Le solde, coût moins recettes, s'ajoute chaque année à la dette publique. Le foyer en paie les intérêts, au taux de l'emprunt d'État à 10 ans retenu pour le budget 2027 (4,3 %), dans la part qu'il prend à toute la dépense publique, comme ceux de la dette actuelle : la charge grandit d'un déficit par année. Un programme qui rapporte plus qu'il ne coûte la réduit d'autant. Ni intérêts composés, ni remboursement, ni effet de la dette sur les taux : c'est un minimum.
 
-Exemple de lecture : « Julien, vendeur à Toulouse. Retraite à 62 ans : il part N mois plus tôt. La mesure coûte entre 9 Md€ par an, selon la candidate, et 38,5 Md€, selon l'Institut Montaigne. Financée par la TVA, elle lui coûterait entre A et B € par an ; par l'impôt sur le revenu, entre C et D €. Non financée, elle creuse le déficit d'autant. »
+Exemple de lecture : « Julien, vendeur à Toulouse. Retraite à 62 ans : il part N mois plus tôt. La mesure coûte entre 9 Md€ par an, selon la candidate, et 38,5 Md€, selon l'Institut Montaigne ; les recettes du programme en couvrent R. Le reste creuse la dette : Julien en paiera A à B € d'intérêts par an dès la première année, C à D € dans dix ans. »
 
 ### Ce que le foyer verse et ce qu'il reçoit
 
@@ -84,7 +84,7 @@ Le moteur ne vaut que s'il reste crédible pour tous les bords.
 3. **La traduction des programmes est publique.** Chaque mesure devient des paramètres documentés dans ce dépôt, contestables par issue, y compris par les partis.
 4. **Aucune consigne de vote.** Le moteur produit des effets, jamais un classement des programmes ni un « bon » choix.
 5. **Tout est reproductible.** Chaque résultat publié renvoie à la version du code, des paramètres et du scénario qui l'a produit.
-6. **Aucune mesure sans sa contrepartie.** Chaque résultat donne le coût ou la recette pour les finances publiques, avec sa source, ou dit qu'il n'est pas chiffré. Quand le candidat ne dit pas qui paie, le moteur ne le décide pas à sa place : il montre plusieurs financements possibles.
+6. **Aucune mesure sans sa contrepartie.** Chaque résultat donne le coût ou la recette pour les finances publiques, avec sa source, ou dit qu'il n'est pas chiffré. Le moteur compte les financements que le candidat annonce, à la hauteur qu'une source fiable leur reconnaît ; ce qu'ils ne couvrent pas, il ne le fait pas payer par un impôt que le candidat n'a pas choisi : il le met en dette, et dit ce que ses intérêts coûtent au foyer.
 
 ## Périmètre du MVP (présidentielle 2027)
 
@@ -95,7 +95,7 @@ Dans le MVP :
 - effets mécaniques via OpenFisca-France : impôts, cotisations, prestations ;
 - une dizaine de mesures phares par programme, pour les principaux candidats ;
 - 5 à 8 personas ménages types ;
-- le coût sourcé de chaque mesure et ses contreparties pour le foyer ;
+- le coût sourcé de chaque mesure, les recettes du programme et ce que sa dette coûte au foyer ;
 - fourchettes macro uniquement quand elles changent la conclusion.
 
 Hors MVP :

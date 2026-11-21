@@ -44,13 +44,15 @@ MESURE = Mesure(
         "l'emploi des seniors, ni le chômage, l'invalidité ou les minima sociaux avant le départ, ni les économies pour les comptes publics ne sont calculés."
     ),
     cout=Cout(
-        -30,
+        -17.7,
         -8.4,
         "Économie de 30 Md€ en année pleine selon le candidat (Public Sénat, 30 septembre 2026, "
         "https://www.publicsenat.fr/actualites/politique/reculer-ou-avancer-lage-legal-avec-ou-sans-capitalisation-ce-que-proposent-les-principaux-candidats-a-lelection-presidentielle-sur-les-retraites). "
         "Pour l'âge à 65 ans seul, en 2035 : 8,4 Md€ pour le système de retraites, 17,7 Md€ pour l'ensemble des finances publiques, selon la Cour "
         "des comptes en février 2025 "
         "(https://www.ccomptes.fr/sites/default/files/2025-03/20250220-Situation-financiere-et-perspectives-du-systeme-de%20retraites.pdf, p. 11 et "
-        "73), qui ne chiffre pas la durée de 45 ans. Sources consultées le 20 novembre 2026.",
+        "73), qui ne chiffre pas la durée de 45 ans. Sources consultées le 20 novembre 2026."
+        " Le simulateur retient au plus les 17,7 Md€ que la Cour des comptes accorde au report à 65 ans, pas les 30 Md€ du candidat.",
+        annonce=-30,
     ),
 )

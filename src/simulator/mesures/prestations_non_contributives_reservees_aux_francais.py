@@ -38,11 +38,13 @@ MESURE = Mesure(
         "territoire et les naturalisations."
     ),
     cout=Cout(
-        -20,
+        -6.7,
         -6.7,
         "Économie de 20 Md€ par an selon Éric Zemmour en 2022, pour les seuls étrangers extra-européens ; 6,7 Md€ selon l'Institut Montaigne, « "
         "compte tenu du volume d'aides sociales effectivement perçues par des étrangers en France » "
         "(https://www.institutmontaigne.org/presidentielle-2022/eric-zemmour/retirer-les-aides-sociales-non-contributives-aux-etrangers-extra-europeens). "
-        "Debout la France ne chiffre pas la mesure seule. Sources consultées le 20 novembre 2026.",
+        "Debout la France ne chiffre pas la mesure seule. Sources consultées le 20 novembre 2026."
+        " Le simulateur retient les 6,7 Md€ de l'Institut Montaigne, pas les 20 Md€ annoncés en 2022.",
+        annonce=-20,
     ),
 )

@@ -44,10 +44,11 @@ SORTIES = (
 )
 VARIABLES_SORTIES = {"impot_revenu": "irpp_economique", "salaire_brut": "salaire_de_base"}
 VERSIONS = {paquet: version(paquet) for paquet in ("simulator", "openfisca-france")}
-# Recettes de 2025 des impôts qui peuvent financer une mesure, en milliards d'euros, l'impôt sur le revenu avant crédits d'impôt
-# (Insee, comptes nationaux annuels, base 2020, « Impôts — Données annuelles de 1995 à 2025 », données provisoires,
-# https://www.insee.fr/fr/statistiques/2381408, consulté le 19 novembre 2026).
-RECETTES = {"tva": 208.8, "csg": 156.6, "impot_revenu": 103.6}
+# Taux auquel l'État emprunte la dette nouvelle : l'hypothèse du projet de loi de finances pour 2027 pour l'emprunt à 10 ans, « comprises
+# entre 4,2 % et 4,3 % à compter de septembre 2026 jusque fin 2027 » (Sénat, rapport général n° 156 sur le PLF pour 2027, tome I,
+# 19 novembre 2026, p. 66, https://www.senat.fr/rap/l26-156-1/l26-156-11.pdf, consulté le 21 novembre 2026). Le même rapport note que le
+# taux à 10 ans a franchi 5 % le 21 octobre 2026 (p. 91) : le taux retenu est plutôt bas.
+TAUX_DETTE_NOUVELLE = 0.043
 # Dépenses des administrations publiques (État, Sécurité sociale, collectivités) en 2024, par fonction, en milliards d'euros. Les intérêts de
 # la dette, que l'Insee compte dans les services généraux (181 Md€), en sont séparés (Insee Première n° 2093, 5 février 2026, figure 2a,
 # données provisoires, https://www.insee.fr/fr/statistiques/8735252, consulté le 19 novembre 2026).
@@ -433,20 +434,32 @@ def calculer_selon(scenario: Scenario, persona: Persona, annees: int = 0, croiss
     }
 
 
-def budget(scenario: Scenario, apres: dict) -> dict | None:
-    """Ce que les mesures chiffrées du scénario coûtent aux finances publiques, et ce que le financer coûterait au foyer selon l'impôt relevé."""
+def budget(scenario: Scenario, apres: dict, annees: int = 0) -> dict | None:
+    """Ce que les mesures chiffrées du scénario coûtent et rapportent aux finances publiques, et ce que le solde non financé coûte au foyer."""
     couts = {mesure: CATALOGUE[mesure].cout for mesure in scenario.mesures}
     chiffres = [cout for cout in couts.values() if cout]
     if not chiffres:
         return None
-    cout = {borne: round(sum(getattr(c, borne) for c in chiffres), 2) for borne in ("bas", "haut")}
-    # Tous les taux d'un impôt sont relevés dans la proportion qui rapporte le coût : le foyer paie cet impôt dans la même proportion de plus.
-    # Un scénario qui rapporte donne, à l'inverse, ce que le foyer gagnerait si la recette lui était rendue par une baisse de cet impôt.
-    # shortcut: assiettes fixes, sans la CSG déductible de l'impôt sur le revenu ; simuler la hausse si une contrepartie change une conclusion.
+
+    def somme(liste):
+        return {borne: round(sum(getattr(c, borne) for c in liste), 2) for borne in ("bas", "haut")}
+
+    cout = somme(chiffres)
+    # Les recettes du programme (impôts, économies, lutte contre la fraude) sont des mesures au coût négatif. Ce qu'elles ne couvrent pas
+    # s'ajoute chaque année à la dette : à l'horizon, elle porte annees + 1 déficits. Le foyer en paie les intérêts dans la part qu'il prend
+    # à toute la dépense publique, comme ceux de la dette actuelle (voir finances_publiques) ; un excédent les réduit d'autant.
+    # shortcut: ni intérêts composés, ni remboursement, ni effet de la dette sur les taux ; les ajouter avec la trajectoire de la dette.
+    part = apres["finances_publiques"]["verse"] / (sum(DEPENSES_PUBLIQUES.values()) * 1e9)
     return {
         "cout": cout,
+        "depenses": somme([c for c in chiffres if c.haut > 0]),
+        "recettes": somme([c for c in chiffres if c.haut <= 0]),
         "non_chiffrees": [mesure for mesure, c in couts.items() if not c],
-        "contreparties": {impot: {borne: round(apres[impot] * md / recette) for borne, md in cout.items()} for impot, recette in RECETTES.items()},
+        "plafonnees": [
+            {"mesure": mesure, "annonce": c.annonce, "retenu": {"bas": c.bas, "haut": c.haut}} for mesure, c in couts.items() if c and c.annonce is not None
+        ],
+        "dette": {borne: round(md * (annees + 1), 2) for borne, md in cout.items()},
+        "interets": {borne: round(md * 1e9 * (annees + 1) * TAUX_DETTE_NOUVELLE * part) for borne, md in cout.items()},
     }
 
 
@@ -503,6 +516,6 @@ def simuler(persona: Persona, scenario: Scenario, annees: int = 0, croissance: f
         "apres": apres | {"bilan": bilan(apres, usages, charges, avant["tva"])},
         "ecart_revenu_disponible": apres["revenu_disponible"] - avant["revenu_disponible"],
         "ecart_pouvoir_achat": apres["revenu_disponible"] + apres["tva"] - avant["revenu_disponible"] - avant["tva"],
-        "budget": budget(scenario, apres),
+        "budget": budget(scenario, apres, annees),
         "versions": VERSIONS,
     }
