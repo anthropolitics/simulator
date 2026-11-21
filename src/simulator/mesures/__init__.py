@@ -30,9 +30,13 @@ class Cout:
     bas: float  # le chiffrage le plus bas ; égal au plus haut quand une seule source chiffre
     haut: float
     source: str  # qui chiffre, et où
+    # Une recette ou une économie que le candidat annonce ne compte qu'au rendement qu'une source fiable lui accorde au plus, et pour zéro sans
+    # aucune évaluation fiable ; annonce garde alors ce que le candidat promet, en négatif comme le coût.
+    annonce: float | None = None
 
     def __post_init__(self):
         assert self.bas <= self.haut and self.source, "un coût va du chiffrage le plus bas au plus haut et cite sa source"
+        assert self.annonce is None or self.annonce <= self.bas <= self.haut <= 0, "une recette plafonnée ne rapporte pas plus que l'annonce"
 
 
 @dataclass(frozen=True)

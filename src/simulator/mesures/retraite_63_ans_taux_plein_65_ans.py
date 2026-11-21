@@ -49,13 +49,15 @@ MESURE = Mesure(
         "tenus fixes ; ni l'emploi des seniors, ni les 40 milliards d'euros d'économies annoncés sur cinq ans ne sont calculés."
     ),
     cout=Cout(
-        -9,
-        -9,
+        0,
+        0,
         "« La réforme des âges rapportera près de 9 milliards d'euros à l'horizon 2032 », selon le candidat "
         "(https://www.avecretailleau.fr/projet/mesure/d, mesure n° 108), qui parle aussi de 40 Md€ cumulés sur cinq ans. Aucun chiffrage "
         "indépendant de l'ensemble : pour le seul âge légal à 63 ans, sans la décote, la Cour des comptes compte un coût de 5,8 Md€ pour le système "
         "de retraites en 2035 "
         "(https://www.ccomptes.fr/sites/default/files/2025-03/20250220-Situation-financiere-et-perspectives-du-systeme-de%20retraites.pdf, p. 11 et "
-        "72). Sources consultées le 20 novembre 2026.",
+        "72). Sources consultées le 20 novembre 2026."
+        " Sans évaluation fiable de l'ensemble, le simulateur ne retient aucune économie ; il garde l'annonce du candidat.",
+        annonce=-9,
     ),
 )

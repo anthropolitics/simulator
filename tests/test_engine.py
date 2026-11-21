@@ -22,9 +22,9 @@ from simulator.consommation import (
 from simulator.engine import (
     DEPENSES_PUBLIQUES,
     LOI_ACTUELLE,
-    RECETTES,
     SMIC_ACTUEL,
     TAUX_ACTUEL,
+    TAUX_DETTE_NOUVELLE,
     Scenario,
     brut_depuis_net,
     budget,
@@ -273,19 +273,32 @@ def test_les_parametres_des_mesures_se_cumulent():
     assert p.taxation_indirecte.tva.taux_normal == pytest.approx(0.215)
 
 
-def test_le_budget_additionne_les_couts_et_les_rapporte_au_foyer(monkeypatch):
-    for id, cout in (("depense", Cout(9, 38.5, "candidat ; institut")), ("recette", Cout(-4, -4, "candidat")), ("muette", None)):
+def test_le_budget_additionne_les_couts_et_met_le_solde_en_dette(monkeypatch):
+    for id, cout in (("depense", Cout(9, 38.5, "candidat ; institut")), ("recette", Cout(-4, -1, "institut", annonce=-10)), ("muette", None)):
         monkeypatch.setitem(CATALOGUE, id, Mesure(id=id, titre=id, candidats=(), source="", citation="", traduction="", cout=cout))
-    # Un foyer qui paie un cent-millionième de la TVA et de la CSG du pays, et pas d'impôt sur le revenu.
-    apres = {"tva": -2088, "csg": -1566, "impot_revenu": 0}
+    # Un foyer qui verse un millionième de la dépense publique.
+    apres = {"finances_publiques": {"verse": sum(DEPENSES_PUBLIQUES.values()) * 1e3}}
     b = budget(Scenario(mesures=("depense", "recette", "muette")), apres)
-    assert b is not None and b["cout"] == {"bas": 5, "haut": 34.5} and b["non_chiffrees"] == ["muette"]
-    # Financer 5 Md€ par la seule TVA la relève de 5 / 208,8 : le foyer en paie sa part, 50 € ; rien par un impôt qu'il ne paie pas.
-    assert b["contreparties"] == {"tva": {"bas": -50, "haut": -345}, "csg": {"bas": -50, "haut": -345}, "impot_revenu": {"bas": 0, "haut": 0}}
-    assert set(b["contreparties"]) == set(RECETTES)
-    # Une économie se lit dans l'autre sens : ce que le foyer gagnerait si elle lui était rendue.
-    assert budget(Scenario(mesures=("recette",)), apres)["contreparties"]["tva"] == {"bas": 40, "haut": 40}
+    assert b is not None and b["cout"] == {"bas": 5, "haut": 37.5} and b["non_chiffrees"] == ["muette"]
+    assert b["depenses"] == {"bas": 9, "haut": 38.5} and b["recettes"] == {"bas": -4, "haut": -1}
+    assert b["plafonnees"] == [{"mesure": "recette", "annonce": -10, "retenu": {"bas": -4, "haut": -1}}]
+    # Le solde non financé devient de la dette ; le foyer paie sa part des intérêts : 5 Md€ à 4,3 %, un millionième, 215 € par an.
+    assert b["dette"] == {"bas": 5, "haut": 37.5}
+    assert b["interets"]["bas"] == pytest.approx(5e9 * TAUX_DETTE_NOUVELLE / 1e6, abs=1) == pytest.approx(215, abs=1)
+    assert b["interets"]["haut"] == pytest.approx(37.5e9 * TAUX_DETTE_NOUVELLE / 1e6, abs=1)
+    # Dans dix ans, la dette porte onze déficits, et les intérêts aussi.
+    dix = budget(Scenario(mesures=("depense", "recette")), apres, annees=10)
+    assert dix["dette"]["bas"] == 55 and dix["interets"]["haut"] == pytest.approx(11 * 37.5e9 * TAUX_DETTE_NOUVELLE / 1e6, abs=1)
+    # Un programme qui rapporte plus qu'il ne coûte réduit la dette et les intérêts que paie le foyer.
+    assert budget(Scenario(mesures=("recette",)), apres)["interets"]["bas"] < 0
     assert budget(Scenario(mesures=("muette",)), apres) is None and budget(Scenario(), apres) is None
+
+
+def test_une_recette_plafonnee_ne_rapporte_pas_plus_que_l_annonce():
+    for bas, haut, annonce in ((-12, -1, -10), (-4, 1, -10)):
+        with pytest.raises(AssertionError):
+            Cout(bas, haut, "institut", annonce=annonce)
+    assert Cout(0, 0, "aucune évaluation fiable", annonce=-10).bas == 0
 
 
 def test_un_cout_cite_sa_source_et_va_du_plus_bas_au_plus_haut():
@@ -297,7 +310,9 @@ def test_un_cout_cite_sa_source_et_va_du_plus_bas_au_plus_haut():
 def test_la_simulation_porte_le_budget_du_scenario():
     r = simuler(seul(2500), Scenario(mesures=("part_fiscale_deuxieme_enfant",)))
     assert r["budget"]["cout"] == {"bas": 2.86, "haut": 2.86}
-    assert r["budget"]["contreparties"]["tva"]["haut"] == round(r["apres"]["tva"] * 2.86 / RECETTES["tva"]) < 0
+    verse = r["apres"]["finances_publiques"]["verse"]
+    assert r["budget"]["interets"]["haut"] == pytest.approx(2.86e9 * TAUX_DETTE_NOUVELLE * verse / (sum(DEPENSES_PUBLIQUES.values()) * 1e9), abs=1)
+    assert r["budget"]["dette"] == {"bas": 2.86, "haut": 2.86}
     assert simuler(seul(2500), Scenario())["budget"] is None
 
 
